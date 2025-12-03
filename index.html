@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>32-Bit Retro Soundtrack Generator</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+        :root {
+            --bg-color: #1a0b2e;
+            --terminal-green: #4af626;
+            --neon-pink: #ff2a6d;
+            --neon-blue: #05d9e8;
+            --grid-line: #2e1a47;
+            --rec-red: #ff0000;
+            --select-bg: #0f0518;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--terminal-green);
+            font-family: 'VT323', monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #container {
+            position: relative;
+            width: 90%;
+            max-width: 800px;
+            border: 4px solid var(--neon-blue);
+            padding: 20px;
+            box-shadow: 0 0 20px var(--neon-blue), inset 0 0 20px rgba(5, 217, 232, 0.2);
+            background: rgba(0, 0, 0, 0.85);
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin: 0 0 20px 0;
+            text-shadow: 4px 4px 0px var(--neon-pink);
+            letter-spacing: 4px;
+        }
+
+        .visualizer {
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            height: 180px;
+            gap: 4px;
+            margin-bottom: 25px;
+            border-bottom: 2px solid var(--neon-pink);
+            padding-bottom: 5px;
+        }
+
+        .bar {
+            width: 15px;
+            background-color: var(--terminal-green);
+            height: 5px;
+            transition: height 0.05s ease;
+            box-shadow: 0 0 5px var(--terminal-green);
+        }
+
+        .bar.kick { background-color: var(--neon-pink); box-shadow: 0 0 5px var(--neon-pink); }
+        .bar.bass { background-color: var(--neon-blue); box-shadow: 0 0 5px var(--neon-blue); }
+
+        #controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        /* Ortak Kontrol Stilleri */
+        .control-element {
+            font-family: 'VT323', monospace;
+            font-size: 1.4rem;
+            padding: 10px 20px;
+            border: 2px solid var(--terminal-green);
+            background: transparent;
+            color: var(--terminal-green);
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 0 5px var(--terminal-green);
+            transition: all 0.2s;
+        }
+
+        .control-element:hover:not(:disabled) {
+            background: var(--terminal-green);
+            color: var(--bg-color);
+            box-shadow: 0 0 15px var(--terminal-green);
+        }
+
+        /* Select Box Özelleştirme */
+        select.control-element {
+            background-color: var(--select-bg);
+            color: var(--neon-blue);
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 5px var(--neon-blue);
+            appearance: none; /* Varsayılan oku gizle */
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2305d9e8%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px top 50%;
+            background-size: 12px auto;
+            padding-right: 30px;
+        }
+        
+        select.control-element:hover {
+            background-color: var(--neon-blue);
+            color: var(--bg-color);
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%231a0b2e%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+        }
+
+        /* Özel Butonlar */
+        #btnRandom {
+            border-color: var(--neon-pink);
+            color: var(--neon-pink);
+            box-shadow: 0 0 5px var(--neon-pink);
+        }
+        #btnRandom:hover {
+            background: var(--neon-pink);
+            color: var(--bg-color);
+            box-shadow: 0 0 15px var(--neon-pink);
+        }
+
+        #btnRecord {
+            border-color: var(--rec-red);
+            color: var(--rec-red);
+            box-shadow: 0 0 5px var(--rec-red);
+        }
+        #btnRecord:hover:not(:disabled) {
+            background: var(--rec-red);
+            color: white;
+        }
+        #btnRecord.recording {
+            background: var(--rec-red);
+            color: white;
+            animation: pulse 1s infinite;
+        }
+
+        button:disabled {
+            border-color: #555 !important;
+            color: #555 !important;
+            box-shadow: none !important;
+            background: transparent !important;
+            cursor: not-allowed;
+            animation: none !important;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; box-shadow: 0 0 5px var(--rec-red); }
+            50% { opacity: 0.5; box-shadow: 0 0 20px var(--rec-red); }
+            100% { opacity: 1; box-shadow: 0 0 5px var(--rec-red); }
+        }
+
+        .status {
+            margin-top: 20px;
+            font-size: 1.2rem;
+            color: var(--neon-blue);
+            min-height: 1.5em;
+        }
+
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.2) 50%,
+                rgba(0,0,0,0.2)
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="scanlines"></div>
+
+    <div id="container">
+        <h1>32-BIT SYNTH</h1>
+        
+        <div class="visualizer" id="visualizer"></div>
+
+        <div id="controls">
+            <!-- TÜR SEÇİMİ -->
+            <select id="genreSelect" class="control-element" onchange="changeGenre()">
+                <option value="arcade">🕹️ ARCADE</option>
+                <option value="lofi">☕ LO-FI</option>
+                <option value="dark">🌑 DARK</option>
+                <option value="glitch">👾 GLITCH</option>
+            </select>
+
+            <button id="btnPlay" class="control-element" onclick="togglePlay()">BAŞLAT</button>
+            <button id="btnRandom" class="control-element" onclick="generateNewSong()">YENİ ŞARKI</button>
+            <button id="btnRecord" class="control-element" onclick="toggleRecord()" disabled>REC</button>
+        </div>
+
+        <div class="status" id="statusText">SİSTEM HAZIR. TÜRÜ SEÇ VE BAŞLAT.</div>
+    </div>
+
+    <script>
+        // --- MÜZİK VERİLERİ ---
+        const Notes = {
+            'C2': 65.41, 'D2': 73.42, 'E2': 82.41, 'F2': 87.31, 'G2': 98.00, 'A2': 110.00, 'B2': 123.47,
+            'C3': 130.81, 'D3': 146.83, 'E3': 164.81, 'F3': 174.61, 'G3': 196.00, 'A3': 220.00, 'B3': 246.94,
+            'C4': 261.63, 'D4': 293.66, 'E4': 329.63, 'F4': 349.23, 'G4': 392.00, 'A4': 440.00, 'B4': 493.88,
+            'C5': 523.25, 'D5': 587.33, 'E5': 659.25, 'F5': 698.46, 'G5': 783.99, 'A5': 880.00,
+            'x': 0
+        };
+
+        // --- TÜR AYARLARI (GENRE CONFIGS) ---
+        // Her türün kendi BPM'i, Enstrüman Tipi ve Notaları var
+        const Genres = {
+            'arcade': {
+                name: "ARCADE RUNNER",
+                tempo: 140,
+                scales: {
+                    melody: ['A3', 'C4', 'D4', 'E4', 'G4', 'A4', 'C5', 'E5'],
+                    bass: ['A2', 'C3', 'D3', 'E3', 'G3']
+                },
+                sounds: {
+                    lead: { type: 'sawtooth', release: 0.4, filterStart: 800, filterEnd: 3000 },
+                    bass: { type: 'square', release: 0.3 },
+                    drumIntensity: 0.8 // Yüksek ritim yoğunluğu
+                }
+            },
+            'lofi': {
+                name: "CHILL LO-FI",
+                tempo: 85,
+                scales: {
+                    melody: ['C4', 'E4', 'G4', 'B4', 'D5'], // Major 7th hissi
+                    bass: ['C3', 'G2', 'A2', 'F2']
+                },
+                sounds: {
+                    lead: { type: 'triangle', release: 0.6, filterStart: 400, filterEnd: 1200 }, // Daha yumuşak
+                    bass: { type: 'sine', release: 0.5 },
+                    drumIntensity: 0.4 // Daha seyrek davul
+                }
+            },
+            'dark': {
+                name: "DARK CYBER",
+                tempo: 110,
+                scales: {
+                    melody: ['E4', 'F4', 'G#4', 'A4', 'B4', 'C5'], // Phrygian/Dark mod
+                    bass: ['E2', 'F2', 'E2', 'B1']
+                },
+                sounds: {
+                    lead: { type: 'sawtooth', release: 0.2, filterStart: 200, filterEnd: 4000 }, // Agresif filtre
+                    bass: { type: 'sawtooth', release: 0.4 }, // Sert bas
+                    drumIntensity: 0.6
+                }
+            },
+            'glitch': {
+                name: "GLITCH CHAOS",
+                tempo: 160,
+                scales: {
+                    melody: ['C4', 'C#4', 'F4', 'F#4', 'G4'], // Kromatik/Rastgele
+                    bass: ['C2', 'F#2', 'C3']
+                },
+                sounds: {
+                    lead: { type: 'square', release: 0.1, filterStart: 2000, filterEnd: 500 }, // Kısa ve garip
+                    bass: { type: 'triangle', release: 0.2 },
+                    drumIntensity: 0.9
+                }
+            }
+        };
+
+        let currentGenre = 'arcade';
+        let genreConfig = Genres['arcade'];
+
+        const sequenceLength = 32;
+        let melodyTrack = [];
+        let bassTrack = [];
+        let drumTrack = [];
+
+        // --- RASTGELE ÜRETİM MOTORU ---
+        function generateNewSong() {
+            melodyTrack = [];
+            bassTrack = [];
+            drumTrack = [];
+            
+            // Seçili türe göre notaları al
+            const scale = genreConfig.scales;
+            const intensity = genreConfig.sounds.drumIntensity;
+
+            for (let i = 0; i < sequenceLength; i++) {
+                // 1. DAVUL
+                let drum = 0;
+                // Kick (1) ve Snare (2) yerleşimi
+                if (i % 8 === 0) drum = 1; 
+                else if (i % 8 === 4) drum = 2; 
+                
+                // Hi-Hat (3) ve ekstra vuruşlar - Türe göre yoğunluk değişir
+                if (drum === 0 && Math.random() < intensity) {
+                    // Lofi ise daha çok hi-hat, Glitch ise rastgele kick/snare
+                    if (currentGenre === 'glitch' && Math.random() > 0.7) drum = Math.random() > 0.5 ? 1 : 2;
+                    else drum = 3;
+                }
+                drumTrack.push(drum);
+
+                // 2. MELODİ
+                // Lofi daha seyrek notalar, Arcade daha sık
+                const noteChance = currentGenre === 'lofi' ? 0.3 : 0.6;
+                
+                if (Math.random() < noteChance) {
+                    const randomNote = scale.melody[Math.floor(Math.random() * scale.melody.length)];
+                    melodyTrack.push(randomNote);
+                } else {
+                    melodyTrack.push('x');
+                }
+
+                // 3. BAS
+                // Bas genellikle vuruşlarda gelir
+                const bassChance = i % 4 === 0 ? 0.8 : 0.1;
+                if (Math.random() < bassChance) { 
+                    const randomBass = scale.bass[Math.floor(Math.random() * scale.bass.length)];
+                    bassTrack.push(randomBass);
+                } else {
+                    bassTrack.push('x');
+                }
+            }
+
+            const status = document.getElementById('statusText');
+            status.innerText = `YENİ ${genreConfig.name} OLUŞTURULDU.`;
+            status.style.color = "var(--neon-pink)";
+            
+            // Tempoyu güncelle (eğer o sırada çalıyorsa hemen yansıması için)
+            tempo = genreConfig.tempo;
+        }
+
+        function changeGenre() {
+            const select = document.getElementById('genreSelect');
+            currentGenre = select.value;
+            genreConfig = Genres[currentGenre];
+            
+            // Tür değişince otomatik yeni şarkı üret
+            generateNewSong();
+            
+            if(isPlaying) {
+                document.getElementById('statusText').innerText = `MOD DEĞİŞTİ: ${genreConfig.name} ÇALIYOR...`;
+            }
+        }
+
+        // --- AUDIO ENGINE ---
+        let audioCtx;
+        let isPlaying = false;
+        let currentStep = 0;
+        let nextNoteTime = 0;
+        let timerID;
+        let tempo = 140; 
+        let lookahead = 25.0; 
+        let scheduleAheadTime = 0.1; 
+        let masterGain;
+
+        let mediaRecorder;
+        let recordedChunks = [];
+        let isRecording = false;
+        let dest;
+
+        const visualizerContainer = document.getElementById('visualizer');
+        const bars = [];
+        const numBars = 32;
+
+        visualizerContainer.innerHTML = ''; 
+        for(let i=0; i<numBars; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'bar';
+            visualizerContainer.appendChild(bar);
+            bars.push(bar);
+        }
+
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+                
+                masterGain = audioCtx.createGain();
+                masterGain.gain.value = 0.35; 
+                
+                const compressor = audioCtx.createDynamicsCompressor();
+                compressor.threshold.value = -10;
+                compressor.knee.value = 40;
+                compressor.ratio.value = 12;
+                compressor.attack.value = 0;
+                compressor.release.value = 0.25;
+
+                masterGain.connect(compressor);
+                
+                dest = audioCtx.createMediaStreamDestination();
+                compressor.connect(audioCtx.destination); 
+                compressor.connect(dest); 
+
+                try {
+                    mediaRecorder = new MediaRecorder(dest.stream);
+                    mediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) recordedChunks.push(e.data);
+                    };
+                    mediaRecorder.onstop = () => {
+                        const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.style.display = 'none';
+                        a.href = url;
+                        const timestamp = new Date().toISOString().slice(0,19).replace(/:/g,"-");
+                        a.download = `pixel-synth-${currentGenre}-${timestamp}.webm`;
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        recordedChunks = [];
+                        document.getElementById('statusText').innerText = "KAYIT İNDİRİLDİ.";
+                    };
+                } catch (err) {
+                    console.error("MediaRecorder hatası:", err);
+                }
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // --- ENSTRÜMANLAR (DİNAMİK) ---
+        function playLead(note, time) {
+            if (note === 'x' || !Notes[note]) return;
+            
+            const settings = genreConfig.sounds.lead; // Tür ayarlarını al
+            
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            const filter = audioCtx.createBiquadFilter();
+
+            osc.type = settings.type; 
+            osc.frequency.value = Notes[note];
+
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(settings.filterStart, time);
+            filter.frequency.exponentialRampToValueAtTime(settings.filterEnd, time + 0.05);
+            // Glitch modunda filtre sapıtır
+            if(currentGenre === 'glitch') filter.frequency.linearRampToValueAtTime(100, time + 0.1);
+            else filter.frequency.exponentialRampToValueAtTime(settings.filterStart, time + 0.2);
+
+            gainNode.gain.setValueAtTime(0, time);
+            gainNode.gain.linearRampToValueAtTime(0.3, time + 0.02); 
+            gainNode.gain.exponentialRampToValueAtTime(0.01, time + settings.release); 
+
+            osc.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(masterGain);
+
+            osc.start(time);
+            osc.stop(time + settings.release + 0.1);
+            
+            triggerVisual(currentStep % numBars, 'lead');
+        }
+
+        function playBass(note, time) {
+            if (note === 'x' || !Notes[note]) return;
+            
+            const settings = genreConfig.sounds.bass;
+
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            osc.type = settings.type; 
+            osc.frequency.value = Notes[note];
+            
+            // Dark modda bas biraz detune (bozuk) olur
+            if(currentGenre === 'dark') osc.detune.value = 10;
+
+            gainNode.gain.setValueAtTime(0, time);
+            gainNode.gain.linearRampToValueAtTime(0.4, time + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, time + settings.release);
+
+            osc.connect(gainNode);
+            gainNode.connect(masterGain);
+
+            osc.start(time);
+            osc.stop(time + settings.release + 0.1);
+
+            triggerVisual(currentStep % numBars, 'bass');
+        }
+
+        function playDrum(type, time) {
+            if (type === 0) return;
+            const gainNode = audioCtx.createGain();
+            gainNode.connect(masterGain);
+
+            // Lofi modunda davullar daha yumuşaktır (volüm düşük)
+            const drumVol = currentGenre === 'lofi' ? 0.6 : 1.0;
+
+            if (type === 1) { // Kick
+                const osc = audioCtx.createOscillator();
+                osc.type = 'sine';
+                
+                // Dark modda kick daha sert
+                const startFreq = currentGenre === 'dark' ? 180 : 150;
+                
+                osc.frequency.setValueAtTime(startFreq, time);
+                osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.5);
+                
+                gainNode.gain.setValueAtTime(drumVol, time);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, time + 0.5);
+                
+                osc.connect(gainNode);
+                osc.start(time);
+                osc.stop(time + 0.5);
+                triggerVisual(currentStep % numBars, 'kick');
+            } 
+            else if (type === 2) { // Snare
+                const bufferSize = audioCtx.sampleRate * 2; 
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+                const noise = audioCtx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.value = currentGenre === 'lofi' ? 800 : 1000; // Lofi snare daha boğuk
+
+                gainNode.gain.setValueAtTime(0.7 * drumVol, time);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, time + 0.2);
+                
+                noise.connect(filter);
+                filter.connect(gainNode);
+                noise.start(time);
+                noise.stop(time + 0.2);
+            }
+            else if (type === 3) { // Hi-Hat
+                const bufferSize = audioCtx.sampleRate;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+                const noise = audioCtx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'highpass';
+                filter.frequency.value = 5000;
+                gainNode.gain.setValueAtTime(0.3 * drumVol, time);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
+                noise.connect(filter);
+                filter.connect(gainNode);
+                noise.start(time);
+                noise.stop(time + 0.05);
+            }
+        }
+
+        // --- SCHEDULER ---
+        function nextNote() {
+            const secondsPerBeat = 60.0 / tempo;
+            const secondsPerSixteenth = secondsPerBeat / 4; 
+            nextNoteTime += secondsPerSixteenth;
+            currentStep++;
+            if (currentStep === sequenceLength) {
+                currentStep = 0;
+            }
+        }
+
+        function scheduleNote(beatNumber, time) {
+            if (melodyTrack.length === 0) return;
+            playLead(melodyTrack[beatNumber], time);
+            playBass(bassTrack[beatNumber], time);
+            playDrum(drumTrack[beatNumber], time);
+        }
+
+        function scheduler() {
+            while (nextNoteTime < audioCtx.currentTime + scheduleAheadTime) {
+                scheduleNote(currentStep, nextNoteTime);
+                nextNote();
+            }
+            if (isPlaying) {
+                timerID = window.setTimeout(scheduler, lookahead);
+            }
+        }
+
+        // --- GÖRSEL TETİKLEYİCİ ---
+        function triggerVisual(index, type) {
+            setTimeout(() => {
+                const bar = bars[index];
+                if (!bar) return;
+                let height = '20px';
+                if (type === 'lead') height = '140px';
+                if (type === 'bass') height = '80px';
+                if (type === 'kick') height = '160px';
+                bar.style.height = height;
+                bar.classList.add(type);
+                setTimeout(() => {
+                    bar.style.height = '5px';
+                    bar.classList.remove(type);
+                }, 150);
+            }, 0); 
+        }
+
+        // --- UI KONTROLLERİ ---
+        function toggleRecord() {
+            const btnRec = document.getElementById('btnRecord');
+            const status = document.getElementById('statusText');
+
+            if (!mediaRecorder) return;
+
+            if (isRecording) {
+                mediaRecorder.stop();
+                isRecording = false;
+                btnRec.innerText = "REC";
+                btnRec.classList.remove('recording');
+            } else {
+                recordedChunks = [];
+                mediaRecorder.start();
+                isRecording = true;
+                btnRec.innerText = "DURDUR";
+                btnRec.classList.add('recording');
+                status.innerText = "KAYIT YAPILIYOR... (DOSYA ADI TÜR İLE BAŞLAYACAK)";
+                status.style.color = "var(--rec-red)";
+            }
+        }
+
+        function togglePlay() {
+            const btn = document.getElementById('btnPlay');
+            const btnRec = document.getElementById('btnRecord');
+            const status = document.getElementById('statusText');
+
+            if (isPlaying) {
+                isPlaying = false;
+                window.clearTimeout(timerID);
+                btn.innerText = "BAŞLAT";
+                btn.style.borderColor = "var(--terminal-green)";
+                status.innerText = "DURAKLATILDI.";
+                status.style.color = "var(--neon-pink)";
+                btnRec.disabled = true;
+            } else {
+                initAudio();
+                if (melodyTrack.length === 0) generateNewSong();
+
+                isPlaying = true;
+                nextNoteTime = audioCtx.currentTime + 0.1;
+                currentStep = 0;
+                scheduler();
+                btn.innerText = "DURDUR";
+                btn.style.borderColor = "var(--neon-pink)";
+                status.innerText = `ÇALIYOR: ${genreConfig.name} [${tempo} BPM]`;
+                status.style.color = "var(--terminal-green)";
+                btnRec.disabled = false;
+            }
+        }
+
+        // İlk açılışta varsayılan ayarlar
+        generateNewSong();
+
+    </script>
+</body>
+</html>
