@@ -1,0 +1,13 @@
+{
+  "name": "retro-32-bit-soundtrack",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Sıfır bağımlılıklı prosedürel retro müzik üreticisi. Node.js yalnızca tek dosya paketi ve ikon üretimi için gereklidir.",
+  "license": "GPL-3.0",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "icons": "node tools/make-icons.mjs",
+    "check": "node tools/check.mjs"
+  }
+}
