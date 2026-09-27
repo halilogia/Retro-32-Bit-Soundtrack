@@ -5,6 +5,8 @@ matematiksel dalgalardan (sine, square, sawtooth, triangle) ve gerilim/yankı zi
 
 Kurulum gerektirmez, derleme gerektirmez, npm paketi yoktur. Sadece tarayıcı.
 
+**Sürüm:** 2.0.0 · [Yol haritası](ROADMAP.md) · [Sürüm geçmişi](CHANGELOG.md) · [Mimari](ARCHITECTURE.md)
+
 ---
 
 ## 🌟 Özellikler
@@ -149,10 +151,13 @@ Retro-32-Bit-Soundtrack/
 │   ├── build.mjs              # Tek dosya paket üreticisi (sıfır bağımlılık)
 │   ├── check.mjs              # Sözdizimi + mantık testleri (sıfır bağımlılık)
 │   └── make-icons.mjs         # PNG ikon üreticisi (sıfır bağımlılık)
+├── docs/
+│   └── KNOWLEDGE.md           # Formüller, MIDI ve mimari notları
 └── dist/                      # Üretilen tek dosya sürümü (git'e dahil değil)
 ```
 
-Ayrıntılı ses grafiği için [ARCHITECTURE.md](ARCHITECTURE.md) dosyasına bakın.
+Yol haritası için [ROADMAP.md](ROADMAP.md), sürüm geçmişi için [CHANGELOG.md](CHANGELOG.md),
+ayrıntılı ses grafiği için [ARCHITECTURE.md](ARCHITECTURE.md) dosyasına bakın.
 
 ---
 
@@ -167,9 +172,9 @@ npm run icons   # assets/*.png yeniden üretir
 npm run check   # tüm modüllerin sözdizimini ve saf mantık testlerini çalıştırır
 ```
 
-`npm run check` komutu nota dönüşümlerini, tür verilerini, beste üretimini, mixer kırpma kurallarını, efekt
-parametrelerini, ses zarfı otomasyonunu, AudioWorklet DSP'sini, MIDI dosya yapısını (kendi ayrıştırıcısıyla) ve
-preset deposunu doğrular.
+`npm run check` komutu (187 kontrol) nota dönüşümlerini, tür verilerini, beste üretimini, mixer kırpma kurallarını,
+efekt parametrelerini, ses zarfı otomasyonunu, node grafiğini, AudioWorklet DSP'sini, MIDI dosya yapısını (kendi
+ayrıştırıcısıyla), preset deposunu, manifest/service worker içeriğini ve paket bütünlüğünü doğrular.
 
 ---
 
@@ -193,5 +198,6 @@ preset deposunu doğrular.
 ## 📜 Lisans
 
 Bu proje açık kaynaklıdır. Kodları istediğiniz gibi değiştirebilir, geliştirebilir ve kullanabilirsiniz.
+Lisans metni için [LICENSE](LICENSE) dosyasına bakın.
 
 Geliştirici Notu: Kulaklık takmanız tavsiye edilir! 🎧

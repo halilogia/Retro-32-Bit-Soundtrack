@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+﻿import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
@@ -17,7 +17,7 @@ function toId(absolutePath) {
 
 function resolveSpecifier(specifier, fromId) {
   if (!specifier.startsWith('.')) {
-    throw new Error(`Harici bağımlılık desteklenmiyor: ${specifier} (${fromId})`);
+    throw new Error(`Harici baÄŸÄ±mlÄ±lÄ±k desteklenmiyor: ${specifier} (${fromId})`);
   }
   return toId(resolve(ROOT, dirname(fromId), specifier));
 }
@@ -71,7 +71,7 @@ function transform(code, id) {
 
   const leftover = body.match(/^\s*(import|export)\s/gm);
   if (leftover) {
-    throw new Error(`${id} içinde dönüştürülemeyen modül ifadesi: ${leftover[0].trim()}`);
+    throw new Error(`${id} iÃ§inde dÃ¶nÃ¼ÅŸtÃ¼rÃ¼lemeyen modÃ¼l ifadesi: ${leftover[0].trim()}`);
   }
 
   const footer = [...exports].map((name) => `__exports.${name} = ${name};`).join('\n');
@@ -95,8 +95,23 @@ function workletPreamble() {
   return `globalThis.__RETRO_STANDALONE__ = true;\nglobalThis.__RETRO_WORKLETS__ = {\n${entries.join(',\n')}\n};`;
 }
 
+function listSources(dir) {
+  const found = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) found.push(...listSources(full));
+    else if (entry.name.endsWith('.js')) found.push(toId(full));
+  }
+  return found;
+}
+
 function buildBundle() {
   load(ENTRY);
+  const worklets = new Set(WORKLET_FILES.map((file) => `js/worklets/${file.replace('./', '')}`));
+  const missing = listSources(join(ROOT, 'js')).filter((id) => !modules.has(id) && !worklets.has(id));
+  if (missing.length > 0) {
+    throw new Error(`Paketlemeye girmeyen modul dosyalari: ${missing.join(', ')}`);
+  }
   const definitions = [...modules.values()].join('\n\n');
   return `(function () {\n'use strict';\n${workletPreamble()}\n\nconst __factories = Object.create(null);\nconst __cache = Object.create(null);\n\nfunction __def(id, factory) {\n  __factories[id] = factory;\n}\n\nfunction __req(id) {\n  if (id in __cache) return __cache[id];\n  const factory = __factories[id];\n  if (!factory) throw new Error('Modul bulunamadi: ' + id);\n  const exports = {};\n  __cache[id] = exports;\n  factory(exports, __req);\n  return exports;\n}\n\n${definitions}\n\n__req('${ENTRY}');\n})();\n`;
 }
@@ -131,10 +146,11 @@ html = inlineScript(html, bundle);
 html = inlineIcon(html);
 
 if (html.includes('type="module"') || html.includes('href="./css/') || html.includes('src="./js/')) {
-  throw new Error('Paketleme tamamlanamadı: harici stil veya modul etiketi kaldı.');
+  throw new Error('Paketleme tamamlanamadÄ±: harici stil veya modul etiketi kaldÄ±.');
 }
 
 mkdirSync(OUT_DIR, { recursive: true });
 writeFileSync(OUT_FILE, html, 'utf8');
 
 console.log(`dist/retro-synth-standalone.html (${modules.size} modul, ${(html.length / 1024).toFixed(1)} KB)`);
+

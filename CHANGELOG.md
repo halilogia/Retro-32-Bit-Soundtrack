@@ -10,11 +10,12 @@ Tüm önemli değişiklikler bu dosyada belgelenir.
 
 ### 🔧 Düzeltmeler
 
-- -
+- `tools/build.mjs` artık paketlemeye girmeyen modül dosyalarını (kullanılmayan ya da yanlış yol yazılmış
+  içe aktarmalar) derleme hatası olarak bildiriyor
 
 ### 📦 Değişiklikler
 
-- ***
+- **
 
 ## [2.0.0] - 27 Eylül 2026
 
@@ -46,8 +47,8 @@ Tüm önemli değişiklikler bu dosyada belgelenir.
 
 ### 📦 Değişiklikler
 
-- 🧱 `index.html` 670 satırlık tek dosyadan uygulama kabuğuna dönüştürüldü; 17 ES modülüne, `css/main.css` dosyasına
-  ve `tools/` klasörüne ayrıldı
+- 🧱 `index.html` 670 satırlık tek dosyadan uygulama kabuğuna dönüştürüldü; 17 ES modülüne ve 2 AudioWorklet
+  betiğine, `css/main.css` dosyasına ve `tools/` klasörüne ayrıldı
 - 🎼 Tür verisi tamamen veri tabanlı hale getirildi (synth kodunda tür adına göre dallanma kaldırıldı)
 - 🎚️ Master kazancı mixer zincirinin parçası oldu; kanallar kazanç kaybı olmadan efektlere gönderim yapar
 - 📱 Sayfa kaydırmaya açıldı, 640 px altı için mobil düzen eklendi

@@ -87,7 +87,7 @@ tanımlıdır. Buradaki `sanitize` fonksiyonlarını güncellemezseniz eski pres
 
 ## 🧪 Değişiklik Yapma Rehberi
 
-1. `npm run check` çalıştır (sözdizimi + mantık testleri, ~190 kontrol)
+1. `npm run check` çalıştır (sözdizimi + mantık testleri, 187 kontrol)
 2. Tarayıcıda `python -m http.server 8123` ile aç ve konsolu kontrol et
 3. Paketlenmiş sürümü etkiliyorsa `npm run build` çalıştır
 4. İkonları değiştirdiysen `npm run icons` çalıştır ve `sw.js` içindeki `CACHE` sürümünü artır
@@ -98,7 +98,10 @@ tanımlıdır. Buradaki `sanitize` fonksiyonlarını güncellemezseniz eski pres
 - `sw.js` içindeki `PRECACHE` listesine yeni bir dosya eklediysen `CACHE` sürümünü değiştir, aksi halde
   eski dosyalar önbellekten gelir
 - `tools/build.mjs` paketleyicisi yalnızca satır başındaki `import`/`export` ifadelerini dönüştürür; yeni modül
-  yazarken bu biçimi bozmayın
+  yazarken bu biçimi bozmayın. Pakete girmeyen modül dosyası varsa derleme hata verir, bu bir güvenlik
+  ağıdır (sessizce dağıtımdan düşen dosyaları yakalar)
+- Yeni bir `js/` altı dosyası eklediysen `sw.js` içindeki `PRECACHE` listesine de ekle (cihazda çevrimdışı
+  çalışma için gerekli)
 - `AudioWorklet` kaynakları `file://` üzerinden yüklenemez; bu durumda `engine.js` yedek kaynağa düşer ve
   `engineInfo` satırında `YEDEK KAYNAK` yazar
 - Web fontu bilinçli olarak JavaScript ile yüklenir; `<head>` içine geri taşırmayın, aksi halde ağ yokken uygulama
