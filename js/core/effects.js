@@ -1,10 +1,13 @@
+import { EQ_BANDS, MAX_EQ_DB } from './mixer-state.js';
 import { clamp } from './theory.js';
 
 const MAX_DELAY = 2;
 const IR_CACHE_LIMIT = 6;
 const DAMP_MIN_HZ = 700;
 const DAMP_MAX_HZ = 20000;
+const MAX_PREDELAY = 0.2;
 const IR_DECAY = 4.5;
+const EQ_GLIDE = 0.02;
 
 function dampFrequency(value) {
   return DAMP_MAX_HZ * Math.pow(DAMP_MIN_HZ / DAMP_MAX_HZ, clamp(value, 0, 1));
@@ -28,17 +31,21 @@ export class ReverbBus {
   constructor(context, destination) {
     this.context = context;
     this.input = context.createGain();
+    this.preDelay = context.createDelay(MAX_PREDELAY);
     this.convolver = context.createConvolver();
     this.damp = context.createBiquadFilter();
     this.output = context.createGain();
     this.cache = new Map();
     this.size = 1.6;
     this.dampValue = 0.6;
+    this.preDelayValue = 0.02;
     this.timer = null;
 
     this.damp.type = 'lowpass';
     this.damp.Q.value = 0.0001;
-    this.input.connect(this.convolver);
+    this.preDelay.delayTime.value = this.preDelayValue;
+    this.input.connect(this.preDelay);
+    this.preDelay.connect(this.convolver);
     this.convolver.connect(this.damp);
     this.damp.connect(this.output);
     this.output.connect(destination);
@@ -70,6 +77,38 @@ export class ReverbBus {
   setDamp(value) {
     this.dampValue = clamp(value, 0, 1);
     this.damp.frequency.setTargetAtTime(dampFrequency(this.dampValue), this.context.currentTime, 0.02);
+  }
+
+  setPreDelay(seconds) {
+    this.preDelayValue = clamp(seconds, 0, MAX_PREDELAY);
+    this.preDelay.delayTime.setTargetAtTime(this.preDelayValue, this.context.currentTime, 0.02);
+  }
+}
+
+export class MasterEq {
+  constructor(context, destination) {
+    this.context = context;
+    this.input = context.createGain();
+    this.output = context.createGain();
+    this.bands = {};
+
+    let node = this.input;
+    for (const band of EQ_BANDS) {
+      const filter = context.createBiquadFilter();
+      filter.type = band.type;
+      filter.frequency.value = band.frequency;
+      node.connect(filter);
+      this.bands[band.key] = filter;
+      node = filter;
+    }
+    node.connect(this.output);
+    if (destination) this.output.connect(destination);
+  }
+
+  setGain(key, db) {
+    const filter = this.bands[key];
+    if (!filter) return;
+    filter.gain.setTargetAtTime(clamp(db, -MAX_EQ_DB, MAX_EQ_DB), this.context.currentTime, EQ_GLIDE);
   }
 }
 

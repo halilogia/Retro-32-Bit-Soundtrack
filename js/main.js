@@ -3,11 +3,16 @@ import { SequencerEngine } from './core/engine.js';
 import { Visualizer } from './ui/visualizer.js';
 import { MixerUI } from './ui/mixer-ui.js';
 import { PresetsUI } from './ui/presets-ui.js';
+import { SettingsUI } from './ui/settings-ui.js';
+import { StatusLog } from './ui/status-log.js';
+import { initTheme } from './ui/theme.js';
 import { el } from './ui/controls.js';
 import { Recorder } from './io/recorder.js';
 import { exportMidi } from './io/midi.js';
-import { downloadBlob, timestamp } from './io/download.js';
+import { encodeWav } from './io/wav.js';
+import { downloadBlob, slugify, timestamp } from './io/download.js';
 import { loadSession, saveSession } from './io/presets.js';
+import { shareFromLocation } from './io/share.js';
 
 const byId = (id) => document.getElementById(id);
 
@@ -17,33 +22,48 @@ const dom = {
   random: byId('btnRandom'),
   record: byId('btnRecord'),
   midi: byId('btnMidi'),
+  wav: byId('btnWav'),
+  theme: byId('btnTheme'),
   status: byId('statusText'),
+  log: byId('statusLog'),
   info: byId('engineInfo'),
   visualizer: byId('visualizer'),
+  settings: byId('songSettings'),
   channels: byId('mixerChannels'),
   buses: byId('mixerBuses'),
+  presetPanel: byId('presetPanel'),
   presetList: byId('presetList'),
   presetName: byId('presetName'),
   presetFile: byId('presetFile')
 };
 
 const TONE_CLASS = { info: '', ok: 'status-ok', warn: 'status-warn', error: 'status-error' };
+const FONT_HREF = 'https://fonts.googleapis.com/css2?family=VT323&display=swap';
+
+const statusLog = new StatusLog(dom.log);
 
 function setStatus(text, tone = 'info') {
   dom.status.textContent = text;
   dom.status.className = `status ${TONE_CLASS[tone] || ''}`.trim();
+  statusLog.push(text, tone);
 }
 
 const engine = new SequencerEngine();
-const visualizer = new Visualizer(dom.visualizer);
+const visualizer = new Visualizer(dom.visualizer, engine.steps);
 const mixerUI = new MixerUI(engine, { channelsRoot: dom.channels, busesRoot: dom.buses });
+const settingsUI = new SettingsUI(engine, dom.settings);
 
 let saveTimer = null;
 function scheduleSessionSave() {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     saveTimer = null;
-    saveSession({ genre: engine.genreKey, mixer: engine.mixer, sequence: engine.sequence });
+    saveSession({
+      genre: engine.genreKey,
+      mixer: engine.mixer,
+      sequence: engine.sequence,
+      settings: engine.settings
+    });
   }, 600);
 }
 
@@ -52,6 +72,8 @@ const presetsUI = new PresetsUI(engine, {
   nameInput: dom.presetName,
   onApply: (preset) => {
     engine.loadState(preset);
+    settingsUI.sync(engine.settings);
+    visualizer.setStepCount(engine.steps);
     setStatus(`PRESET UYGULANDI: ${preset.name}`, 'ok');
   },
   onStatus: setStatus
@@ -71,6 +93,8 @@ const recorder = new Recorder({
   onError: (message) => setStatus(message, 'error')
 });
 
+let wavBusy = false;
+
 function fillGenres() {
   dom.genre.textContent = '';
   for (const genre of GENRE_LIST) {
@@ -88,9 +112,11 @@ function syncTransport() {
 
 function setEngineInfo(detail) {
   if (!dom.info) return;
-  const worklets = detail.worklets && detail.worklets.length > 0;
   const rate = detail.sampleRate ? `${(detail.sampleRate / 1000).toFixed(1)} KHZ` : '';
-  dom.info.textContent = worklets ? `İŞLEMCİ: AUDIOWORKLET ${rate}` : `İŞLEMCİ: YEDEK KAYNAK ${rate}`;
+  const crusher = detail.crusher === 'waveshaper' ? 'WAVESHAPER' : 'AUDIOWORKLET';
+  dom.info.textContent = `İŞLEMCİ: ${crusher} · GÜRÜLTÜ: ${
+    detail.worklets && detail.worklets.includes('retro-noise') ? 'WORKLET' : 'BUFFER'
+  } ${rate}`;
 }
 
 async function togglePlay() {
@@ -114,6 +140,7 @@ function newSong() {
 
 function changeGenre() {
   engine.setGenre(dom.genre.value);
+  settingsUI.sync(engine.settings);
   if (engine.isPlaying) {
     setStatus(`MOD DEĞİŞTİ: ${engine.genre.name} ÇALIYOR...`, 'warn');
   } else {
@@ -122,11 +149,8 @@ function changeGenre() {
 }
 
 function toggleRecord() {
-  if (recorder.recording) {
-    recorder.stop();
-  } else {
-    recorder.start();
-  }
+  if (recorder.recording) recorder.stop();
+  else recorder.start();
   syncTransport();
 }
 
@@ -139,16 +163,37 @@ function exportMidiFile() {
   }
 }
 
+async function exportWavFile() {
+  if (wavBusy) return;
+  wavBusy = true;
+  dom.wav.disabled = true;
+  setStatus('ÇEVRİMDIŞI RENDER EDİLİYOR...', 'warn');
+  try {
+    const { buffer, loops } = await engine.renderOffline({ loops: 2, sampleRate: 44100 });
+    const blob = encodeWav(buffer);
+    downloadBlob(blob, `retro-synth-${slugify(engine.genre.name)}-${timestamp()}.wav`);
+    setStatus(`WAV İNDİRİLDİ (${loops} DÖNGÜ, ${buffer.duration.toFixed(1)} SN).`, 'ok');
+  } catch (error) {
+    setStatus(`WAV HATASI: ${error.message}`, 'error');
+  } finally {
+    wavBusy = false;
+    dom.wav.disabled = false;
+  }
+}
+
 function bindControls() {
   dom.play.addEventListener('click', togglePlay);
   dom.random.addEventListener('click', newSong);
   dom.genre.addEventListener('change', changeGenre);
   dom.record.addEventListener('click', toggleRecord);
   dom.midi.addEventListener('click', exportMidiFile);
+  dom.wav.addEventListener('click', exportWavFile);
+  initTheme(dom.theme);
 
   byId('presetSave').addEventListener('click', () => presetsUI.save());
   byId('presetExport').addEventListener('click', () => presetsUI.export());
   byId('presetImport').addEventListener('click', () => dom.presetFile.click());
+  byId('presetShare').addEventListener('click', () => presetsUI.share());
   dom.presetFile.addEventListener('change', async () => {
     const [file] = dom.presetFile.files;
     dom.presetFile.value = '';
@@ -157,6 +202,7 @@ function bindControls() {
   dom.presetName.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') presetsUI.save();
   });
+  presetsUI.bindDropZone(dom.presetPanel);
 }
 
 function bindKeyboard() {
@@ -171,6 +217,8 @@ function bindKeyboard() {
       newSong();
     } else if (event.key.toLowerCase() === 'm') {
       engine.update({ 'master.mute': !engine.mixer.master.mute });
+    } else if (event.key.toLowerCase() === 'w') {
+      exportWavFile();
     }
   });
 }
@@ -180,6 +228,12 @@ function bindEngine() {
     if (type === 'play' || type === 'pause') syncTransport();
     if (type === 'genre') {
       dom.genre.value = engine.genreKey;
+      settingsUI.sync(engine.settings);
+      scheduleSessionSave();
+    }
+    if (type === 'settings') {
+      settingsUI.sync(detail);
+      visualizer.setStepCount(detail.steps);
       scheduleSessionSave();
     }
     if (type === 'sequence') scheduleSessionSave();
@@ -200,6 +254,15 @@ function bindVisibility() {
   });
 }
 
+function loadRetroFont() {
+  if (!document.head || document.querySelector(`link[data-font="${FONT_HREF}"]`)) return;
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = FONT_HREF;
+  link.dataset.font = FONT_HREF;
+  document.head.append(link);
+}
+
 function registerServiceWorker() {
   if (globalThis.__RETRO_STANDALONE__) return;
   if (!('serviceWorker' in navigator)) return;
@@ -211,17 +274,6 @@ function registerServiceWorker() {
   });
 }
 
-const FONT_HREF = 'https://fonts.googleapis.com/css2?family=VT323&display=swap';
-
-function loadRetroFont() {
-  if (!document.head || document.querySelector(`link[data-font="${FONT_HREF}"]`)) return;
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = FONT_HREF;
-  link.dataset.font = FONT_HREF;
-  document.head.append(link);
-}
-
 function boot() {
   fillGenres();
   bindControls();
@@ -230,12 +282,19 @@ function boot() {
   bindVisibility();
   registerServiceWorker();
 
-  const session = loadSession();
+  const shared = shareFromLocation();
+  const session = shared || loadSession();
   if (session) {
     engine.loadState(session);
     dom.genre.value = engine.genreKey;
+    dom.presetName.value = session.name;
     mixerUI.sync(engine.mixer);
-    setStatus(`OTURUM GERİ YÜKLENDİ: ${session.name}`, 'info');
+    settingsUI.sync(engine.settings);
+    visualizer.setStepCount(engine.steps);
+    setStatus(
+      shared ? `PAYLAŞILAN ŞARKI YÜKLENDİ: ${session.name}` : `OTURUM GERİ YÜKLENDİ: ${session.name}`,
+      'info'
+    );
   } else {
     engine.newSong();
     setStatus('SİSTEM HAZIR. TÜRÜ SEÇ VE BAŞLAT.');

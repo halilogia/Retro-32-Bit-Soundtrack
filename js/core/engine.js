@@ -1,9 +1,11 @@
-import { STEPS, secondsPerStep, clamp } from './theory.js';
+import { secondsPerStep, clamp } from './theory.js';
 import { getGenre, hasGenre } from './genres.js';
-import { composeSong, emptySequence, sanitizeSequence, hasContent, DRUM } from './composer.js';
+import { composeSong, emptySequence, sanitizeSequence, fitSequence, hasContent, DRUM } from './composer.js';
 import { sanitizeMixer, patchMixer, DEFAULT_MIXER, CHANNELS } from './mixer-state.js';
+import { DEFAULT_SETTINGS, sanitizeSettings } from './song-settings.js';
 import { NoisePool, playLead, playBass, playDrum } from './instruments.js';
-import { ReverbBus, DelayBus } from './effects.js';
+import { ReverbBus, DelayBus, MasterEq } from './effects.js';
+import { Crusher } from './crush.js';
 import { loadProcessors } from '../worklets/registry.js';
 
 const LOOKAHEAD_MS = 25;
@@ -12,15 +14,108 @@ const START_DELAY = 0.08;
 const METER_FFT = 256;
 const METER_FLOOR_DB = -54;
 const GLIDE = 0.01;
+const RENDER_TAIL = 2.5;
+const RENDER_START = 0.05;
+
+function createMeter(context) {
+  const analyser = context.createAnalyser();
+  analyser.fftSize = METER_FFT;
+  analyser.smoothingTimeConstant = 0;
+  return { analyser, data: new Float32Array(METER_FFT) };
+}
+
+function createStrip(context, key, bus, reverbInput, delayInput) {
+  const input = context.createGain();
+  const gain = context.createGain();
+  const panner = context.createStereoPanner();
+  const meter = createMeter(context);
+  const reverbSend = context.createGain();
+  const delaySend = context.createGain();
+
+  input.connect(gain);
+  gain.connect(panner);
+  panner.connect(bus);
+  panner.connect(meter.analyser);
+  panner.connect(reverbSend);
+  panner.connect(delaySend);
+  reverbSend.connect(reverbInput);
+  delaySend.connect(delayInput);
+
+  return { key, input, gain, panner, meter, reverbSend, delaySend };
+}
+
+export function createGraph(context, options = {}) {
+  const { processors = new Set(), media = false } = options;
+
+  const bus = context.createGain();
+  const masterGain = context.createGain();
+  const compressor = context.createDynamicsCompressor();
+  const masterMeter = createMeter(context);
+
+  compressor.threshold.value = -10;
+  compressor.knee.value = 40;
+  compressor.ratio.value = 12;
+  compressor.attack.value = 0;
+  compressor.release.value = 0.25;
+
+  const eq = new MasterEq(context, compressor);
+  const crusher = new Crusher(context, eq.input, { useWorklet: processors.has('retro-crush') });
+
+  bus.connect(masterGain);
+  masterGain.connect(crusher.input);
+  compressor.connect(masterMeter.analyser);
+  masterMeter.analyser.connect(context.destination);
+
+  const mediaDest = media ? context.createMediaStreamDestination() : null;
+  if (mediaDest) compressor.connect(mediaDest);
+
+  const reverb = new ReverbBus(context, bus);
+  const delay = new DelayBus(context, bus);
+  const strips = {};
+  for (const { key } of CHANNELS) {
+    strips[key] = createStrip(context, key, bus, reverb.input, delay.input);
+  }
+  const noise = new NoisePool(context, processors.has('retro-noise'));
+
+  return { context, bus, masterGain, eq, crusher, compressor, masterMeter, mediaDest, reverb, delay, strips, noise };
+}
+
+export function applyMixer(graph, mixer, options = {}) {
+  const { tempo = 120 } = options;
+  const time = graph.context.currentTime;
+  const glide = (param, value) => param.setTargetAtTime(value, time, GLIDE);
+
+  for (const { key } of CHANNELS) {
+    const state = mixer.channels[key];
+    const strip = graph.strips[key];
+    glide(strip.gain.gain, state.mute ? 0 : state.volume);
+    glide(strip.panner.pan, state.pan);
+    glide(strip.reverbSend.gain, state.reverb);
+    glide(strip.delaySend.gain, state.delay);
+  }
+
+  glide(graph.masterGain.gain, mixer.master.mute ? 0 : mixer.master.volume);
+  for (const key of Object.keys(graph.eq.bands)) graph.eq.setGain(key, mixer.eq[key]);
+  graph.reverb.setSize(mixer.reverb.size);
+  graph.reverb.setDamp(mixer.reverb.damp);
+  graph.reverb.setPreDelay(mixer.reverb.preDelay);
+  graph.delay.setFeedback(mixer.delay.feedback);
+  graph.delay.setDamp(mixer.delay.damp);
+  graph.delay.setTime((mixer.delay.division * 60) / tempo);
+  graph.crusher.setAmount(mixer.master.crush);
+}
+
+function defaultSettings() {
+  return { ...DEFAULT_SETTINGS };
+}
 
 export class SequencerEngine {
   constructor() {
     this.context = null;
+    this.graph = null;
     this.ready = false;
     this.pending = null;
     this.worklets = new Set();
-    this.noise = null;
-    this.strips = {};
     this.events = [];
     this.stateListeners = new Set();
     this.frameListeners = new Set();
@@ -28,7 +123,9 @@ export class SequencerEngine {
     this.timer = null;
     this.raf = null;
     this.genreKey = 'arcade';
-    this.sequence = emptySequence();
+    this.settings = defaultSettings();
+    this.noteLengthCustom = false;
+    this.sequence = emptySequence(this.settings.steps);
     this.mixer = sanitizeMixer(DEFAULT_MIXER);
     this.isPlaying = false;
     this.step = 0;
@@ -43,12 +140,20 @@ export class SequencerEngine {
     return this.genre.tempo;
   }
 
-  get usingWorklets() {
-    return this.worklets.size > 0;
+  get steps() {
+    return this.settings.steps;
+  }
+
+  get stepDuration() {
+    return secondsPerStep(this.tempo);
   }
 
   getStream() {
-    return this.mediaDest ? this.mediaDest.stream : null;
+    return this.graph && this.graph.mediaDest ? this.graph.mediaDest.stream : null;
+  }
+
+  voiceOptions() {
+    return { stepDuration: this.stepDuration, noteLength: this.settings.noteLength };
   }
 
   onState(listener) {
@@ -88,110 +193,71 @@ export class SequencerEngine {
     const context = new AudioContextClass({ latencyHint: 'interactive' });
     this.context = context;
     this.worklets = await loadProcessors(context);
-
-    this.bus = context.createGain();
-    this.masterGain = context.createGain();
-    this.compressor = context.createDynamicsCompressor();
-    this.masterMeter = this.createMeter();
-    this.mediaDest = context.createMediaStreamDestination();
-
-    this.compressor.threshold.value = -10;
-    this.compressor.knee.value = 40;
-    this.compressor.ratio.value = 12;
-    this.compressor.attack.value = 0;
-    this.compressor.release.value = 0.25;
-
-    this.bus.connect(this.masterGain);
-
-    if (this.worklets.has('retro-crush')) {
-      this.crush = new AudioWorkletNode(context, 'retro-crush', {
-        numberOfInputs: 1,
-        numberOfOutputs: 1,
-        outputChannelCount: [2],
-        parameterData: { bits: 16, drive: 1, wet: 0 }
-      });
-      this.masterGain.connect(this.crush);
-      this.crush.connect(this.compressor);
-    } else {
-      this.crush = null;
-      this.masterGain.connect(this.compressor);
-    }
-
-    this.compressor.connect(this.masterMeter.analyser);
-    this.masterMeter.analyser.connect(context.destination);
-    this.compressor.connect(this.mediaDest);
-
-    this.reverb = new ReverbBus(context, this.bus);
-    this.delay = new DelayBus(context, this.bus);
-
-    for (const { key } of CHANNELS) this.strips[key] = this.createStrip(key);
-
-    this.noise = new NoisePool(context, this.worklets.has('retro-noise'));
+    this.graph = createGraph(context, { processors: this.worklets, media: true });
 
     this.ready = true;
-    this.applyMixerState(this.mixer);
+    this.applyMixerState();
     this.startFrameLoop();
-    this.emit('context', { worklets: [...this.worklets], sampleRate: context.sampleRate });
+    this.emit('context', {
+      worklets: [...this.worklets],
+      crusher: this.graph.crusher.useWorklet ? 'worklet' : 'waveshaper',
+      sampleRate: context.sampleRate
+    });
     return this.context;
-  }
-
-  createMeter() {
-    const analyser = this.context.createAnalyser();
-    analyser.fftSize = METER_FFT;
-    analyser.smoothingTimeConstant = 0;
-    return { analyser, data: new Float32Array(METER_FFT) };
-  }
-
-  createStrip(key) {
-    const context = this.context;
-    const input = context.createGain();
-    const gain = context.createGain();
-    const meter = this.createMeter();
-    const reverbSend = context.createGain();
-    const delaySend = context.createGain();
-
-    input.connect(gain);
-    gain.connect(this.bus);
-    gain.connect(meter.analyser);
-    gain.connect(reverbSend);
-    gain.connect(delaySend);
-    reverbSend.connect(this.reverb.input);
-    delaySend.connect(this.delay.input);
-
-    return { key, input, gain, meter, reverbSend, delaySend };
   }
 
   setGenre(key) {
     if (!hasGenre(key)) return this.genreKey;
     this.genreKey = key;
+    if (!this.noteLengthCustom) {
+      this.settings = sanitizeSettings({ ...this.settings, noteLength: this.genre.sounds.lead.noteLength });
+    }
     this.newSong();
-    this.updateDelayTime();
+    this.setMixer(this.genre.mixer);
+    this.emit('settings', this.settings);
     this.emit('genre', this.genre);
     return this.genreKey;
   }
 
   newSong() {
-    this.setSequence(composeSong(this.genre));
+    this.setSequence(
+      composeSong(this.genre, {
+        steps: this.settings.steps,
+        scaleId: this.settings.scaleId,
+        arp: this.settings.arp
+      })
+    );
     return this.sequence;
   }
 
   setSequence(sequence) {
-    this.sequence = sanitizeSequence(sequence);
+    this.sequence = sanitizeSequence(sequence, this.settings.steps);
     this.events.length = 0;
     this.emit('sequence', this.sequence);
     return this.sequence;
   }
 
+  setSettings(patch) {
+    const next = sanitizeSettings({ ...this.settings, ...patch });
+    if (patch && patch.noteLength !== undefined) this.noteLengthCustom = true;
+    this.settings = next;
+    if (next.steps !== this.sequence.melody.length) {
+      this.setSequence(fitSequence(this.sequence, next.steps));
+    }
+    this.emit('settings', next);
+    return this.settings;
+  }
+
   setMixer(mixer) {
     this.mixer = sanitizeMixer(mixer);
-    this.applyMixerState(this.mixer);
+    this.applyMixerState();
     this.notifyMixer();
     return this.mixer;
   }
 
   update(changes) {
     this.mixer = patchMixer(this.mixer, changes);
-    this.applyMixerState(this.mixer);
+    this.applyMixerState();
     this.notifyMixer();
     return this.mixer;
   }
@@ -200,50 +266,27 @@ export class SequencerEngine {
     for (const listener of this.mixerListeners) listener(this.mixer);
   }
 
-  loadState({ genre, sequence, mixer }) {
+  loadState({ genre, sequence, mixer, settings }) {
     if (hasGenre(genre)) this.genreKey = genre;
+    if (settings) {
+      this.noteLengthCustom = true;
+      this.setSettings(settings);
+    }
     if (sequence) this.setSequence(sequence);
     else this.newSong();
     if (mixer) this.setMixer(mixer);
-    this.updateDelayTime();
     this.emit('genre', this.genre);
     return this.sequence;
   }
 
-  applyMixerState(mixer) {
+  applyMixerState() {
     if (!this.ready) return;
-    const now = this.context.currentTime;
-    const glide = (param, value) => param.setTargetAtTime(value, now, GLIDE);
-
-    for (const { key } of CHANNELS) {
-      const state = mixer.channels[key];
-      const strip = this.strips[key];
-      glide(strip.gain.gain, state.mute ? 0 : state.volume);
-      glide(strip.reverbSend.gain, state.reverb);
-      glide(strip.delaySend.gain, state.delay);
-    }
-
-    glide(this.masterGain.gain, mixer.master.mute ? 0 : mixer.master.volume);
-    this.reverb.setSize(mixer.reverb.size);
-    this.reverb.setDamp(mixer.reverb.damp);
-    this.delay.setFeedback(mixer.delay.feedback);
-    this.delay.setDamp(mixer.delay.damp);
-    this.applyCrush(mixer.master.crush);
-    this.updateDelayTime();
-  }
-
-  applyCrush(amount) {
-    if (!this.crush) return;
-    const now = this.context.currentTime;
-    const params = this.crush.parameters;
-    params.get('bits').setTargetAtTime(Math.round(16 - 12 * amount), now, GLIDE);
-    params.get('drive').setTargetAtTime(1 + 2.5 * amount, now, GLIDE);
-    params.get('wet').setTargetAtTime(clamp(amount * 1.6, 0, 1), now, GLIDE);
+    applyMixer(this.graph, this.mixer, { time: this.context.currentTime, tempo: this.tempo });
   }
 
   updateDelayTime() {
     if (!this.ready) return;
-    this.delay.setTime((this.mixer.delay.division * 60) / this.tempo);
+    this.graph.delay.setTime((this.mixer.delay.division * 60) / this.tempo);
   }
 
   async play() {
@@ -288,8 +331,8 @@ export class SequencerEngine {
     const horizon = this.context.currentTime + SCHEDULE_AHEAD;
     while (this.nextNoteTime < horizon) {
       this.scheduleStep(this.step, this.nextNoteTime);
-      this.step = (this.step + 1) % STEPS;
-      this.nextNoteTime += secondsPerStep(this.tempo);
+      this.step = (this.step + 1) % this.settings.steps;
+      this.nextNoteTime += this.stepDuration;
     }
     this.timer = setTimeout(() => this.scheduler(), LOOKAHEAD_MS);
   }
@@ -297,12 +340,13 @@ export class SequencerEngine {
   scheduleStep(step, time) {
     const context = this.context;
     const genre = this.genre;
+    const options = this.voiceOptions();
     const event = (kind) => this.events.push({ time, index: step, kind });
 
-    if (playLead(context, this.strips.lead.input, genre, this.sequence.melody[step], time)) event('lead');
-    if (playBass(context, this.strips.bass.input, genre, this.sequence.bass[step], time)) event('bass');
+    if (playLead(context, this.graph.strips.lead.input, genre, this.sequence.melody[step], time, options)) event('lead');
+    if (playBass(context, this.graph.strips.bass.input, genre, this.sequence.bass[step], time, options)) event('bass');
     const drum = this.sequence.drums[step];
-    if (drum !== DRUM.NONE && playDrum(context, this.strips.drums.input, this.noise, genre, drum, time) && drum === DRUM.KICK) {
+    if (drum !== DRUM.NONE && playDrum(context, this.graph.strips.drums.input, this.graph.noise, genre, drum, time) && drum === DRUM.KICK) {
       event('kick');
     }
   }
@@ -333,16 +377,46 @@ export class SequencerEngine {
 
   readLevels() {
     const levels = { master: 0 };
-    for (const { key } of CHANNELS) levels[key] = this.ready ? this.readPeak(this.strips[key].meter) : 0;
-    levels.master = this.ready ? this.readPeak(this.masterMeter) : 0;
+    for (const { key } of CHANNELS) levels[key] = this.ready ? this.readPeak(this.graph.strips[key].meter) : 0;
+    levels.master = this.ready ? this.readPeak(this.graph.masterMeter) : 0;
     return levels;
+  }
+
+  async renderOffline(options = {}) {
+    const OfflineContext = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!OfflineContext) throw new Error('Bu tarayıcı çevrimdışı render desteklemiyor.');
+
+    const loops = clamp(Math.floor(options.loops || 2), 1, 8);
+    const sampleRate = clamp(Math.floor(options.sampleRate || 44100), 8000, 96000);
+    const stepDuration = this.stepDuration;
+    const totalSteps = this.settings.steps * loops;
+    const duration = RENDER_START + totalSteps * stepDuration + RENDER_TAIL;
+
+    const offline = new OfflineContext(2, Math.ceil(duration * sampleRate), sampleRate);
+    const processors = await loadProcessors(offline).catch(() => new Set());
+    const graph = createGraph(offline, { processors });
+    applyMixer(graph, this.mixer, { time: 0, tempo: this.tempo });
+
+    const voice = this.voiceOptions();
+    for (let index = 0; index < totalSteps; index++) {
+      const step = index % this.settings.steps;
+      const time = RENDER_START + index * stepDuration;
+      playLead(offline, graph.strips.lead.input, this.genre, this.sequence.melody[step], time, voice);
+      playBass(offline, graph.strips.bass.input, this.genre, this.sequence.bass[step], time, voice);
+      if (this.sequence.drums[step] !== DRUM.NONE) {
+        playDrum(offline, graph.strips.drums.input, graph.noise, this.genre, this.sequence.drums[step], time);
+      }
+    }
+
+    const buffer = await offline.startRendering();
+    return { buffer, duration, loops, sampleRate, crusher: graph.crusher.useWorklet ? 'worklet' : 'waveshaper' };
   }
 
   async dispose() {
     this.pause();
     if (this.raf !== null) cancelAnimationFrame(this.raf);
     this.raf = null;
-    if (this.noise) this.noise.dispose();
+    if (this.graph && this.graph.noise) this.graph.noise.dispose();
     if (this.context) await this.context.close();
     this.ready = false;
   }

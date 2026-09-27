@@ -8,6 +8,27 @@ function safeExp(value) {
   return Math.max(1, value);
 }
 
+function tailOf(gate) {
+  return Math.max(0.02, gate * 0.2);
+}
+
+function noteGate(settings, options) {
+  const length = options.noteLength ?? settings.noteLength ?? 2;
+  const step = options.stepDuration || 0.125;
+  const attack = Math.min(settings.attack, step);
+  return Math.max(attack + 0.01, Math.min(clamp(length, 0.25, 8) * step, settings.release));
+}
+
+function applyEnvelope(gain, settings, time, gateEnd) {
+  const attack = Math.max(0.001, Math.min(settings.attack, gateEnd - time - 0.001));
+  const tail = tailOf(gateEnd - time);
+  gain.gain.setValueAtTime(0, time);
+  gain.gain.linearRampToValueAtTime(settings.level, time + attack);
+  gain.gain.setValueAtTime(settings.level, gateEnd);
+  gain.gain.exponentialRampToValueAtTime(0.01, gateEnd + tail);
+  gain.gain.setValueAtTime(0, gateEnd + tail + 0.01);
+}
+
 export class NoisePool {
   constructor(context, useWorklet) {
     this.context = context;
@@ -88,11 +109,13 @@ export class NoisePool {
   }
 }
 
-export function playLead(context, destination, genre, note, time) {
+export function playLead(context, destination, genre, note, time, options = {}) {
   const freq = noteToFreq(note);
   if (!freq) return false;
   const settings = genre.sounds.lead;
   const filter = settings.filter;
+  const gate = noteGate(settings, options);
+  const gateEnd = time + gate;
 
   const osc = context.createOscillator();
   const filterNode = context.createBiquadFilter();
@@ -112,23 +135,23 @@ export function playLead(context, destination, genre, note, time) {
     else filterNode.frequency.exponentialRampToValueAtTime(target, time + settle.at);
   }
 
-  gain.gain.setValueAtTime(0, time);
-  gain.gain.linearRampToValueAtTime(settings.level, time + settings.attack);
-  gain.gain.exponentialRampToValueAtTime(0.01, time + settings.release);
+  applyEnvelope(gain, settings, time, gateEnd);
 
   osc.connect(filterNode);
   filterNode.connect(gain);
   gain.connect(destination);
 
   osc.start(time);
-  osc.stop(time + settings.release + 0.1);
+  osc.stop(gateEnd + tailOf(gate));
   return true;
 }
 
-export function playBass(context, destination, genre, note, time) {
+export function playBass(context, destination, genre, note, time, options = {}) {
   const freq = noteToFreq(note);
   if (!freq) return false;
   const settings = genre.sounds.bass;
+  const gate = noteGate(settings, options);
+  const gateEnd = time + gate;
 
   const osc = context.createOscillator();
   const gain = context.createGain();
@@ -137,15 +160,13 @@ export function playBass(context, destination, genre, note, time) {
   osc.frequency.setValueAtTime(freq, time);
   if (settings.detune) osc.detune.setValueAtTime(settings.detune, time);
 
-  gain.gain.setValueAtTime(0, time);
-  gain.gain.linearRampToValueAtTime(settings.level, time + settings.attack);
-  gain.gain.exponentialRampToValueAtTime(0.01, time + settings.release);
+  applyEnvelope(gain, settings, time, gateEnd);
 
   osc.connect(gain);
   gain.connect(destination);
 
   osc.start(time);
-  osc.stop(time + settings.release + 0.1);
+  osc.stop(gateEnd + tailOf(gate));
   return true;
 }
 

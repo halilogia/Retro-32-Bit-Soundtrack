@@ -126,7 +126,7 @@ function inlineStyles(html) {
 function inlineScript(html, bundle) {
   return html.replace(
     /<script type="module" src="\.\/js\/main\.js"><\/script>/,
-    `<script>\n${bundle}</script>`
+    `<script data-retro-bundle>\n${bundle}</script>`
   );
 }
 

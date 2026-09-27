@@ -10,12 +10,56 @@ Tüm önemli değişiklikler bu dosyada belgelenir.
 
 ### 🔧 Düzeltmeler
 
-- `tools/build.mjs` artık paketlemeye girmeyen modül dosyalarını (kullanılmayan ya da yanlış yol yazılmış
-  içe aktarmalar) derleme hatası olarak bildiriyor
+-
 
 ### 📦 Değişiklikler
 
 - **
+
+## [2.1.0] - 27 Eylül 2026
+
+### ✨ Eklenenler
+
+- 🎛️ **ŞARKI AYARLARI paneli:** döngü uzunluğu (16 / 32 / 64 adım), nota uzunluğu (0.25 - 8 adım),
+  arpej yönü (rastgele / yukarı / aşağı) ve ölçek seçimi (11 hazır gam)
+- 🎚️ **Yeni türler:** Synthwave (NEON DRIVE), Chiptune (PIXEL PIPELINE), Dungeon Synth (CRYPT DEPTHS)
+  — toplam 7 tür
+- 🎚️ **Tür başına mixer varsayılanları:** tür değiştirildiğinde o türün karakterine uygun reverb/delay/EQ
+  karışımı otomatik yüklenir (örn. Chiptune yankısız, Synthwave yoğun delay'li)
+- 🎚️ **Kanal PAN kontrolü** (`StereoPannerNode`, merkez detent)
+- 🎚️ **Master EQ** — iki bantlı shelf (BASS 220 Hz, TREBLE 3600 Hz, ±12 dB)
+- ⏱️ **Reverb pre-delay** (0 - 200 ms)
+- 🎛️ **CRUSH yedeği:** AudioWorklet yüklenemeyen ortamlarda (ör. `file://`) WaveShaper tabanlı bitcrush +
+  doygunluk devreye giriyor, düğme artık her ortamda çalışıyor
+- 💾 **WAV dışa aktarım** — `OfflineAudioContext` ile iki döngü 44.1 kHz 16-bit stereo render edilip
+  `.wav` olarak indiriliyor (MIDI ve kayıt ile aynı düğme grubunda)
+- 🔗 **Paylaşım bağlantısı** — preset base64url olarak URL hash'ine sıkıştırılıp panoya kopyalanıyor;
+  açılan sayfa bağlantıdaki şarkıyı doğrudan yüklüyor
+- 📥 **Preset sürükle-bırak** — JSON dosyası doğrudan preset panosuna bırakılabiliyor
+- 🌓 **Açık/koyu tema** — sistem tercihini izler, düğmeyle değiştirilir ve hatırlanır
+- 🕘 **Durum geçmişi** — son 4 durum mesajı saat damgasıyla listeleniyor
+- ↩️ **Sürgü geri bildirimi** — çift tıklayıp fabrika değerine dönerken etikette yanıp sönen işaret
+- ⌨️ `W` kısayolu WAV dışa aktarımı, mixer şeritlerinde klavye odağını belirginleştiren `:focus-within` stili
+
+### 🔧 Düzeltmeler
+
+- 🎚️ Master EQ zinciri kompresörden kopuktu (EQ hiç etkilenmiyordu); zincir
+  `master → crush → EQ → kompresör` olarak düzeltildi
+- 🔊 `MasterEq` ve `Crusher` çıkışları hedef verilmeden `undefined` bir düğüme bağlanıyordu
+- ⏱️ Notaların kapatılma zamanı iki kez `time` eklenerek hesaplanıyordu; zarf ve `osc.stop()` süresi düzeltildi
+- 🔤 Uygulama açılışında yanlış tema bir anı görünmesin diye tema `<head>` içinde küçük bir betikle belirleniyor
+- 🧰 `tools/build.mjs` artık pakete girmeyen modül dosyalarını derleme hatası olarak bildiriyor
+  (sessizce dağıtımdan düşen dosyaları yakalar)
+
+### 📦 Değişiklikler
+
+- 🏗️ Ses grafiği `createGraph()` ve `applyMixer()` fonksiyonlarına çıkarıldı; canlı bağlam ve çevrimdışı
+  render aynı topolojiyi paylaşıyor
+- 🧩 Yeni modüller: `core/scales.js`, `core/song-settings.js`, `core/crush.js`, `io/wav.js`, `io/share.js`,
+  `ui/settings-ui.js`, `ui/status-log.js`, `ui/theme.js` (toplam 25 ES modülü)
+- 💾 Preset ve oturum şemasına `settings` alanı eklendi (uzunluk, nota uzunluğu, arpej, ölçek)
+- 🎼 MIDI çıktısı sabit 32 adım yerine dizinin gerçek uzunluğundan hesaplanıyor
+- 🧪 Test paketi 309 kontrole, tarayıcı doğrulaması 56 kontrole yükseltildi (üç çalışma senaryosu)
 
 ## [2.0.0] - 27 Eylül 2026
 

@@ -10,6 +10,7 @@ import {
   listPresets,
   savePreset
 } from '../io/presets.js';
+import { encodeShare } from '../io/share.js';
 
 export class PresetsUI {
   constructor(engine, { list, nameInput, onApply, onStatus }) {
@@ -25,7 +26,8 @@ export class PresetsUI {
       name: this.nameInput.value,
       genre: this.engine.genreKey,
       mixer: this.engine.mixer,
-      sequence: this.engine.sequence
+      sequence: this.engine.sequence,
+      settings: this.engine.settings
     });
   }
 
@@ -76,6 +78,42 @@ export class PresetsUI {
     }
   }
 
+  async share() {
+    const base = typeof location === 'undefined' ? '' : `${location.origin}${location.pathname}`;
+    const url = encodeShare(this.current(), base);
+    if (typeof history !== 'undefined' && history.replaceState) {
+      history.replaceState(null, '', url.slice(url.indexOf('#')));
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url);
+        this.onStatus('PAYLAŞIM BAĞLANTISI KOPYALANDI.', 'ok');
+        return;
+      }
+    } catch (error) {
+      void error;
+    }
+    this.onStatus(`BAĞLANTI: ${url}`, 'warn');
+  }
+
+  bindDropZone(element) {
+    const stop = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    element.addEventListener('dragover', (event) => {
+      stop(event);
+      element.classList.add('is-dropping');
+    });
+    element.addEventListener('dragleave', () => element.classList.remove('is-dropping'));
+    element.addEventListener('drop', (event) => {
+      stop(event);
+      element.classList.remove('is-dropping');
+      const [file] = event.dataTransfer ? event.dataTransfer.files : [];
+      if (file) this.import(file);
+    });
+  }
+
   render() {
     const presets = listPresets();
     this.list.textContent = '';
@@ -88,7 +126,10 @@ export class PresetsUI {
       this.list.append(
         el('li', { class: 'preset-item' }, [
           el('span', { class: 'preset-name', text: cleanName(preset.name) }),
-          el('span', { class: 'preset-meta', text: `${genre.name} · ${genre.tempo} BPM` }),
+          el('span', {
+            class: 'preset-meta',
+            text: `${genre.name} · ${genre.tempo} BPM · ${preset.settings.steps} ADIM`
+          }),
           el('button', { type: 'button', class: 'preset-action', text: 'YÜKLE', onclick: () => this.load(preset.name) }),
           el('button', { type: 'button', class: 'preset-action preset-delete', text: 'SİL', onclick: () => this.remove(preset.name) })
         ])

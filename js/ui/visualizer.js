@@ -1,4 +1,3 @@
-import { STEPS } from '../core/theory.js';
 import { el } from './controls.js';
 
 const HEIGHTS = { lead: '140px', bass: '80px', kick: '160px' };
@@ -6,25 +5,36 @@ const RESET_DELAY = 150;
 const IDLE_HEIGHT = '5px';
 
 export class Visualizer {
-  constructor(root, count = STEPS) {
+  constructor(root, count = 32) {
     this.root = root;
     this.bars = [];
-    this.timers = new Array(count).fill(null);
-    for (let i = 0; i < count; i++) {
+    this.timers = [];
+    this.setStepCount(count);
+  }
+
+  setStepCount(count) {
+    const size = Math.max(1, Math.round(count));
+    if (this.bars.length === size) return;
+    for (const timer of this.timers) clearTimeout(timer);
+    this.root.textContent = '';
+    this.bars = [];
+    this.timers = new Array(size).fill(null);
+    for (let i = 0; i < size; i++) {
       const bar = el('div', { class: 'bar' });
-      root.append(bar);
+      this.root.append(bar);
       this.bars.push(bar);
     }
   }
 
   pulse(index, kind) {
-    const bar = this.bars[index % this.bars.length];
+    const slot = ((index % this.bars.length) + this.bars.length) % this.bars.length;
+    const bar = this.bars[slot];
     if (!bar) return;
     bar.style.height = HEIGHTS[kind] || '20px';
     bar.classList.add(kind);
-    if (this.timers[index]) clearTimeout(this.timers[index]);
-    this.timers[index] = setTimeout(() => {
-      this.timers[index] = null;
+    if (this.timers[slot]) clearTimeout(this.timers[slot]);
+    this.timers[slot] = setTimeout(() => {
+      this.timers[slot] = null;
       bar.style.height = IDLE_HEIGHT;
       bar.classList.remove(kind);
     }, RESET_DELAY);

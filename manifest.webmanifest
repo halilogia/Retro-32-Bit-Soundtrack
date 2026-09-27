@@ -1,7 +1,7 @@
 {
   "name": "32-Bit Retro Soundtrack Generator",
   "short_name": "Retro32",
-  "description": "Tarayıcıda çalışan prosedürel retro müzik üreticisi: mixer, reverb/delay, MIDI dışa aktarım ve preset kaydetme.",
+  "description": "Tarayıcıda çalışan prosedürel retro müzik üreticisi: mixer, reverb/delay, WAV ve MIDI dışa aktarım, preset kaydetme.",
   "lang": "tr",
   "dir": "ltr",
   "start_url": "./",
@@ -11,7 +11,11 @@
   "orientation": "any",
   "background_color": "#1a0b2e",
   "theme_color": "#1a0b2e",
-  "categories": ["music", "entertainment", "utilities"],
+  "categories": [
+    "music",
+    "entertainment",
+    "utilities"
+  ],
   "icons": [
     {
       "src": "./assets/icon-192.png",

@@ -17,21 +17,41 @@ export function percent(value) {
   return `${Math.round(value * 100)}%`;
 }
 
+export function panLabel(value) {
+  if (Math.abs(value) < 0.005) return 'MERKEZ';
+  return value < 0 ? `${Math.round(-value * 100)}L` : `${Math.round(value * 100)}R`;
+}
+
+export function decibels(value) {
+  return `${value > 0 ? '+' : ''}${value.toFixed(1)} DB`;
+}
+
+export function milliseconds(value) {
+  return `${Math.round(value * 1000)} MS`;
+}
+
+function flashReset(root) {
+  root.classList.remove('is-reset');
+  void root.offsetWidth;
+  root.classList.add('is-reset');
+  setTimeout(() => root.classList.remove('is-reset'), 700);
+}
+
 export function createFader({ id, label, min = 0, max = 1, step = 0.01, value = 0, format = percent, onInput }) {
   const input = el('input', { type: 'range', id, min, max, step, value, class: 'fader-input' });
   const output = el('output', { class: 'fader-value', for: id });
   const show = (raw) => {
     output.textContent = format(Number(raw));
   };
-  input.addEventListener('input', () => {
-    const next = Number(input.value);
+  const commit = (next) => {
     show(next);
     if (onInput) onInput(next);
-  });
+  };
+  input.addEventListener('input', () => commit(Number(input.value)));
   input.addEventListener('dblclick', () => {
     input.value = String(value);
-    show(value);
-    if (onInput) onInput(value);
+    commit(value);
+    flashReset(root);
   });
   show(value);
 

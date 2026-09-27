@@ -1,10 +1,9 @@
-import { STEPS, STEPS_PER_BEAT, noteToMidi } from '../core/theory.js';
+import { STEPS_PER_BEAT, noteToMidi } from '../core/theory.js';
 import { DRUM } from '../core/composer.js';
 import { downloadBytes, slugify, timestamp } from './download.js';
 
 const TICKS_PER_BEAT = 480;
 const STEP_TICKS = TICKS_PER_BEAT / STEPS_PER_BEAT;
-const TOTAL_TICKS = STEPS * STEP_TICKS;
 const BEATS = 4;
 const TICKS_PER_BAR = TICKS_PER_BEAT * BEATS;
 
@@ -91,11 +90,11 @@ function noteDuration(releaseSeconds, capSteps, bpm) {
   return Math.max(STEP_TICKS, Math.min(ticks, STEP_TICKS * capSteps));
 }
 
-function assemble(notes, events) {
+function assemble(notes, events, totalTicks) {
   const items = [];
   for (const event of events) items.push({ tick: event.tick || 0, order: 2, data: event.data });
   for (const note of notes) {
-    const end = Math.min(note.tick + note.duration, TOTAL_TICKS);
+    const end = Math.min(note.tick + note.duration, totalTicks);
     items.push({ tick: note.tick, order: 1, data: noteOn(note.channel, note.note, note.velocity) });
     items.push({ tick: end, order: 0, data: noteOff(note.channel, note.note) });
   }
@@ -107,13 +106,13 @@ function assemble(notes, events) {
     bytes.push(...vlq(item.tick - last), ...item.data);
     last = item.tick;
   }
-  bytes.push(...vlq(TOTAL_TICKS - last), ...meta(0x2f));
+  bytes.push(...vlq(totalTicks - last), ...meta(0x2f));
   return chunk('MTrk', bytes);
 }
 
-function collect(track, program, duration, velocity) {
+function collect(track, program, duration, velocity, steps) {
   const notes = [];
-  for (let step = 0; step < STEPS; step++) {
+  for (let step = 0; step < steps; step++) {
     const note = track[step];
     if (note === undefined || note === null) continue;
     const value = typeof note === 'number' ? note : noteToMidi(note);
@@ -132,27 +131,31 @@ function collect(track, program, duration, velocity) {
 
 export function buildMidi(sequence, genre) {
   const bpm = genre.tempo || 140;
+  const steps = Math.max(1, sequence.melody.length);
+  const totalTicks = steps * STEP_TICKS;
   const lead = { channel: 0, program: PROGRAM_BY_TYPE[genre.sounds.lead.type] ?? 81 };
   const bass = { channel: 1, program: PROGRAM_BY_TYPE[genre.sounds.bass.type] ?? 38 };
 
   const leadTrack = assemble(
-    collect(sequence.melody, lead, noteDuration(genre.sounds.lead.release, 1.8, bpm), VELOCITY.lead),
+    collect(sequence.melody, lead, noteDuration(genre.sounds.lead.release, 1.8, bpm), VELOCITY.lead, steps),
     [
       { data: trackName(`Lead - ${genre.name}`) },
       { data: programChange(lead.channel, lead.program) }
-    ]
+    ],
+    totalTicks
   );
 
   const bassTrack = assemble(
-    collect(sequence.bass, bass, noteDuration(genre.sounds.bass.release, 2, bpm), VELOCITY.bass),
+    collect(sequence.bass, bass, noteDuration(genre.sounds.bass.release, 2, bpm), VELOCITY.bass, steps),
     [
       { data: trackName(`Bass - ${genre.name}`) },
       { data: programChange(bass.channel, bass.program) }
-    ]
+    ],
+    totalTicks
   );
 
   const drumNotes = [];
-  for (let step = 0; step < STEPS; step++) {
+  for (let step = 0; step < steps; step++) {
     const drum = sequence.drums[step];
     const note = DRUM_MIDI[drum];
     if (note === undefined) continue;
@@ -166,10 +169,11 @@ export function buildMidi(sequence, genre) {
     });
   }
 
-  const drumTrack = assemble(drumNotes, [
-    { data: trackName('Drums - GM 9') },
-    { data: keySignatureEvent() }
-  ]);
+  const drumTrack = assemble(
+    drumNotes,
+    [{ data: trackName('Drums - GM 9') }, { data: keySignatureEvent() }],
+    totalTicks
+  );
 
   const header = chunk('MThd', [
     0x00, 0x01,
@@ -183,7 +187,7 @@ export function buildMidi(sequence, genre) {
       ...vlq(0), ...trackName(genre.name),
       ...vlq(0), ...tempoEvent(bpm),
       ...vlq(0), ...timeSignatureEvent(),
-      ...vlq(0), ...meta(0x06, bytesOf(`tempo=${bpm} steps=${STEPS} ticksPerBeat=${TICKS_PER_BEAT} loopTicks=${TOTAL_TICKS} barTicks=${TICKS_PER_BAR}`)),
+      ...vlq(0), ...meta(0x06, bytesOf(`tempo=${bpm} steps=${steps} ticksPerBeat=${TICKS_PER_BEAT} loopTicks=${totalTicks} barTicks=${TICKS_PER_BAR}`)),
       ...vlq(0), ...meta(0x2f)
     ]
   );

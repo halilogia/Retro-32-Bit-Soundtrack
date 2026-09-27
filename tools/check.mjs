@@ -74,6 +74,7 @@ class FakeNode {
     this.frequency = new FakeParam(350);
     this.detune = new FakeParam(0);
     this.delayTime = new FakeParam(0);
+    this.pan = new FakeParam(0);
     this.Q = new FakeParam(1);
     this.threshold = new FakeParam(-24);
     this.knee = new FakeParam(30);
@@ -126,6 +127,13 @@ function createFakeContext() {
       return node;
     },
     createBufferSource: () => new FakeNode('bufferSource'),
+    createStereoPanner: () => new FakeNode('panner'),
+    createWaveShaper: () => {
+      const node = new FakeNode('shaper');
+      node.curve = null;
+      node.oversample = 'none';
+      return node;
+    },
     createDynamicsCompressor: () => new FakeNode('compressor'),
     createAnalyser: () => new FakeNode('analyser'),
     createMediaStreamDestination: () => {
@@ -225,6 +233,11 @@ function countNotes(track, type) {
   return track.events.filter((event) => event.kind === 'midi' && event.type === type).length;
 }
 
+async function blobBytes(blob) {
+  const view = new DataView(await blob.arrayBuffer());
+  return new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+}
+
 async function run() {
   const sourceFiles = [...listFiles(join(ROOT, 'js'), ['.js']), join(ROOT, 'sw.js')];
   const buildFiles = listFiles(join(ROOT, 'tools'), ['.mjs']);
@@ -250,9 +263,43 @@ async function run() {
     Math.abs(theory.midiToFreq(theory.noteToMidi('C4')) - 261.63) < 0.01,
     String(theory.midiToFreq(theory.noteToMidi('C4')))
   );
+  equal('transposeNote yarım ton', theory.transposeNote('C4', 1), 'C#4');
+  equal('transposeNote oktav', theory.transposeNote('C4', 12), 'C5');
+  equal('rootOf notasi', theory.rootOf('G#4'), 'G#');
+  equal('normalizeSteps 64', theory.normalizeSteps(64), 64);
+  equal('normalizeSteps gecersiz', theory.normalizeSteps(48), 32);
+  equal('STEP_LENGTHS', theory.STEP_LENGTHS, [16, 32, 64]);
+  assert('adim suresi', Math.abs(theory.secondsPerStep(120) - 0.125) < 1e-9);
 
   const genresModule = await importModule('js/core/genres.js');
-  equal('tur sayisi', genresModule.GENRE_KEYS.length, 4);
+  const getGenreOf = (key) => genresModule.getGenre(key);
+
+  const scales = await importModule('js/core/scales.js');
+  equal('olcek sayisi', scales.SCALES.length, 11);
+  equal('varsayilan olcek', scales.getScale('yok').id, 'genre');
+  equal('pentatonik notalar', scales.buildScaleNotes('A', [0, 3, 5, 7, 10], 1, 4), ['A4', 'C5', 'D5', 'E5', 'G5']);
+  equal(
+    'olcek cozumlemesi ilk nota',
+    scales.resolveScales(getGenreOf('arcade'), 'minor-pentatonic').melody[0],
+    'A4'
+  );
+  equal('olcek cozumlemesi bas', scales.resolveScales(getGenreOf('arcade'), 'minor-pentatonic').bass.length, 3);
+  equal('tur kitabi korunur', scales.resolveScales(getGenreOf('arcade'), 'genre').melody, getGenreOf('arcade').scales.melody);
+
+  const songSettings = await importModule('js/core/song-settings.js');
+  const cleanSettings = songSettings.sanitizeSettings({ steps: 64, noteLength: 1, arp: 'up', scaleId: 'dorian' });
+  equal('ayar adim', cleanSettings.steps, 64);
+  equal('ayar nota uzunlugu', cleanSettings.noteLength, 1);
+  equal('ayar arpej', cleanSettings.arp, 'up');
+  equal('ayar olcek', cleanSettings.scaleId, 'dorian');
+  const dirtySettings = songSettings.sanitizeSettings({ steps: 7, noteLength: 99, arp: 'yok', scaleId: 'yok' });
+  equal('gecersiz adim duzeltilir', dirtySettings.steps, 32);
+  equal('gecersiz nota uzunlugu kirpilir', dirtySettings.noteLength, 8);
+  equal('gecersiz arpej duzeltilir', dirtySettings.arp, 'random');
+  equal('gecersiz olcek duzeltilir', dirtySettings.scaleId, 'genre');
+
+  equal('tur sayisi', genresModule.GENRE_KEYS.length, 7);
+  assert('yeni turler', ['synthwave', 'chiptune', 'dungeon'].every((key) => genresModule.hasGenre(key)));
   for (const key of genresModule.GENRE_KEYS) {
     const genre = genresModule.getGenre(key);
     assert(`${key} tempo`, genre.tempo > 0 && genre.tempo < 300, String(genre.tempo));
@@ -265,44 +312,78 @@ async function run() {
       genre.sounds.lead.type &&
         genre.sounds.lead.filter.start > 0 &&
         genre.sounds.lead.filter.to > 0 &&
+        genre.sounds.lead.noteLength > 0 &&
         genre.sounds.bass.type &&
+        genre.sounds.bass.noteLength > 0 &&
         genre.sounds.drums.kick.start > 0 &&
         genre.sounds.drums.snare.filter.freq > 0 &&
         genre.sounds.drums.hat.filter.freq > 0 &&
         genre.sounds.melodyChance > 0 &&
         genre.sounds.bassChance.offBeat >= 0
     );
+    assert(
+      `${key} mixer varsayilanlari`,
+      genre.mixer.master &&
+        genre.mixer.channels.lead &&
+        typeof genre.mixer.reverb.preDelay === 'number' &&
+        typeof genre.mixer.eq.bass === 'number' &&
+        typeof genre.mixer.channels.lead.pan === 'number'
+    );
   }
   equal('bilinmeyen tur yedek doner', genresModule.hasGenre('bossa'), false);
+  equal('chiptune reverb kapalı', getGenreOf('chiptune').mixer.channels.lead.reverb, 0);
+  equal('synthwave delay gonderimi', getGenreOf('synthwave').mixer.channels.lead.delay, 0.3);
 
   const composer = await importModule('js/core/composer.js');
-  const song = composer.composeSong(genresModule.getGenre('arcade'));
+  const song = composer.composeSong(getGenreOf('arcade'));
   equal('beste uzunlugu', song.melody.length, 32);
   assert('melodi gecerli', song.melody.every((note) => theory.isNote(note) || note === 'x'));
   assert('bas gecerli', song.bass.every((note) => theory.isNote(note) || note === 'x'));
   assert('davul gecerli', song.drums.every((value) => [0, 1, 2, 3].includes(value)));
+  const longSong = composer.composeSong(getGenreOf('arcade'), { steps: 64 });
+  equal('64 adim desteklenir', longSong.melody.length, 64);
+  const shortSong = composer.composeSong(getGenreOf('arcade'), { steps: 16 });
+  equal('16 adim desteklenir', shortSong.drums.length, 16);
+  const arpUp = composer.composeSong(getGenreOf('arcade'), { arp: 'up', scaleId: 'minor-pentatonic' });
+  const arpDown = composer.composeSong(getGenreOf('arcade'), { arp: 'down', scaleId: 'minor-pentatonic' });
+  assert('arpej her adimda nota', arpUp.melody.every((note) => note !== 'x'));
+  equal('arpej yukarı ilk nota', arpUp.melody[0], 'A4');
+  equal('arpej aşağı yönü', arpDown.melody[1], 'G6');
   const sanitized = composer.sanitizeSequence({ melody: ['C4', 5, null], bass: 'nope', drums: [9] });
   equal('bozuk veri temizlenir', sanitized.melody.length, 32);
   equal('bozuk eleman atilir', sanitized.melody[1], 'x');
   assert('davul varsayilana doner', sanitized.drums.every((value) => [0, 1, 2, 3].includes(value)));
+  const sanitized64 = composer.sanitizeSequence({ melody: ['C4'] }, 64);
+  equal('adım sayısına göre temizleme', sanitized64.melody.length, 64);
+  const fitted = composer.fitSequence({ melody: ['C4', 'D4'], bass: ['C2'], drums: [1, 0] }, 4);
+  equal('döngü tekrarı', fitted.melody, ['C4', 'D4', 'C4', 'D4']);
+  equal('döngü tekrarı bas', fitted.bass, ['C2', 'C2', 'C2', 'C2']);
 
   const mixerState = await importModule('js/core/mixer-state.js');
   const mixer = mixerState.sanitizeMixer({
     master: { volume: 5, mute: 'yes', crush: -1 },
-    channels: { lead: { volume: 0.5, reverb: 9 } },
-    delay: { division: 0.4, feedback: 4 }
+    channels: { lead: { volume: 0.5, reverb: 9, pan: 3 } },
+    delay: { division: 0.4, feedback: 4 },
+    reverb: { preDelay: 5, size: 99 },
+    eq: { bass: 40, treble: -40 }
   });
   equal('master volume kirpilir', mixer.master.volume, 1);
   equal('master mute varsayilan', mixer.master.mute, false);
   equal('crush kirpilir', mixer.master.crush, 0);
   equal('lead volume korunur', mixer.channels.lead.volume, 0.5);
   equal('reverb kirpilir', mixer.channels.lead.reverb, 1);
-  equal('gecersiz division yedek', mixer.delay.division, 0.75);
+  equal('pan kirpilir', mixer.channels.lead.pan, 1);
+  equal('gecersiz division en yakina yuvarlanir', mixer.delay.division, 0.5);
   equal('feedback kirpilir', mixer.delay.feedback, 0.85);
+  equal('predelay kirpilir', mixer.reverb.preDelay, 0.2);
+  equal('reverb boyutu kirpilir', mixer.reverb.size, 4);
+  equal('eq bass kirpilir', mixer.eq.bass, 12);
+  equal('eq treble kirpilir', mixer.eq.treble, -12);
   equal('kanal sayisi', Object.keys(mixer.channels).length, 3);
-  const patched = mixerState.patchMixer(mixer, { 'channels.bass.mute': true, 'reverb.size': 2.5 });
+  const patched = mixerState.patchMixer(mixer, { 'channels.bass.mute': true, 'reverb.size': 2.5, 'eq.treble': 3 });
   equal('yol bazli patch mute', patched.channels.bass.mute, true);
   equal('yol bazli patch reverb', patched.reverb.size, 2.5);
+  equal('yol bazli patch eq', patched.eq.treble, 3);
   equal('patch kaynak nesneyi bozmaz', mixer.channels.bass.mute, false);
 
   const effects = await importModule('js/core/effects.js');
@@ -320,7 +401,18 @@ async function run() {
   delay.setDamp(1);
   assert('damp en dusuk frekans', delay.damp.frequency.value < 1000, String(delay.damp.frequency.value));
   const reverb = new effects.ReverbBus(fakeContext, destination);
-  assert('reverb zinciri bagli', reverb.input.outputs.includes(reverb.convolver));
+  assert('reverb zinciri bagli', reverb.input.outputs.includes(reverb.preDelay));
+  assert('reverb pre-delay zinciri', reverb.preDelay.outputs.includes(reverb.convolver));
+  reverb.setPreDelay(0.08);
+  equal('reverb pre-delay suresi', reverb.preDelay.delayTime.value, 0.08);
+  reverb.setPreDelay(9);
+  equal('reverb pre-delay kirpilir', reverb.preDelay.delayTime.value, 0.2);
+  const eq = new effects.MasterEq(fakeContext, destination);
+  eq.setGain('bass', 6);
+  equal('eq bandi uygulanir', eq.bands.bass.gain.value, 6);
+  eq.setGain('bass', 99);
+  equal('eq kirpilir', eq.bands.bass.gain.value, 12);
+  assert('eq iki bant', Object.keys(eq.bands).length === 2, Object.keys(eq.bands).join(','));
   const impulse = effects.createImpulseResponse(fakeContext, 1);
   const data = impulse.getChannelData(0);
   const head = data.slice(0, Math.floor(data.length * 0.1));
@@ -342,7 +434,7 @@ async function run() {
   equal('lead osilator frekansi', leadOsc.frequency.value, 220);
   equal('lead filtresi turu', leadFilter.type, 'lowpass');
   equal('lead filtresi settle', leadFilter.frequency.value, 800);
-  equal('lead kazanc zarfı', leadGain.gain.value, 0.01);
+  equal('lead kazanc zarfı', leadGain.gain.value, 0);
   equal('lead baslangic zamanı', leadOsc.started[0], 1);
   assert('lead durdurma suresi', leadOsc.stopped[0] > 1.4 && leadOsc.stopped[0] < 1.6, String(leadOsc.stopped[0]));
   instruments.playLead(fakeContext, leadDest, glitch, 'C4', 0);
@@ -369,51 +461,108 @@ async function run() {
   globalThis.window.AudioContext = function AudioContextShim() {
     return createFakeContext();
   };
+  globalThis.window.OfflineAudioContext = function OfflineContextShim(channels, length, rate) {
+    const context = createFakeContext();
+    context.sampleRate = rate || 44100;
+    context.destination = new FakeNode('destination');
+    context.startRendering = async () => ({
+      numberOfChannels: channels,
+      length,
+      sampleRate: context.sampleRate,
+      duration: length / context.sampleRate,
+      getChannelData: () => new Float32Array(length)
+    });
+    return context;
+  };
 
   const engineModule = await importModule('js/core/engine.js');
   const engine = new engineModule.SequencerEngine();
   await engine.ensureContext();
+  const graph = engine.graph;
   assert('motor hazır', engine.ready === true);
   assert('kayıt akışı var', !!engine.getStream());
   equal('kayıt parçası kanal içeriyor', engine.getStream().getAudioTracks().length, 1);
-  assert('lead girişi şeride bağlı', engine.strips.lead.input.outputs[0] === engine.strips.lead.gain);
-  assert('şerit reverb gönderimi bağlı', engine.strips.lead.reverbSend.outputs[0] === engine.reverb.input);
-  assert('şerit delay gönderimi bağlı', engine.strips.lead.delaySend.outputs[0] === engine.delay.input);
-  assert('şerit master hattına bağlı', engine.strips.lead.gain.outputs.includes(engine.bus));
-  assert('master zinciri', engine.bus.outputs[0] === engine.masterGain);
-  assert('kompresör master kazancına bağlı', engine.masterGain.outputs[0] === engine.compressor);
-  assert('analizör kompresöre bağlı', engine.compressor.outputs.includes(engine.masterMeter.analyser));
+  assert('lead girişi şeride bağlı', graph.strips.lead.input.outputs[0] === graph.strips.lead.gain);
+  assert('şerit gain panner’a bağlı', graph.strips.lead.gain.outputs[0] === graph.strips.lead.panner);
+  assert('panner reverb gönderimine bağlı', graph.strips.lead.panner.outputs.includes(graph.strips.lead.reverbSend));
+  assert('şerit reverb gönderimi bağlı', graph.strips.lead.reverbSend.outputs[0] === graph.reverb.input);
+  assert('şerit delay gönderimi bağlı', graph.strips.lead.delaySend.outputs[0] === graph.delay.input);
+  assert('panner master hattına bağlı', graph.strips.lead.panner.outputs.includes(graph.bus));
+  assert('master zinciri', graph.bus.outputs[0] === graph.masterGain);
+  assert('master gain crusher girişinde', graph.masterGain.outputs[0] === graph.crusher.input);
+  assert('crusher çıkışı eq girişinde', graph.crusher.output.outputs[0] === graph.eq.input);
+  assert('crusher çıkışı eq girişinde', graph.crusher.output.outputs[0] === graph.eq.input);
+  assert('eq çıkışı kompresöre bağlı', graph.eq.output.outputs[0] === graph.compressor);
+  assert('analizör kompresöre bağlı', graph.compressor.outputs.includes(graph.masterMeter.analyser));
+  assert('yedek crusher kullanılıyor', graph.crusher.useWorklet === false);
 
-  engine.update({ 'channels.lead.volume': 0.25, 'master.mute': true });
-  equal('fader değeri düğümlere yazılır', engine.strips.lead.gain.gain.value, 0.25);
-  equal('master mute uygulanır', engine.masterGain.gain.value, 0);
-  engine.update({ 'master.mute': false });
-  equal('master mute açılır', engine.masterGain.gain.value, 0.35);
+  engine.update({ 'channels.lead.volume': 0.25, 'channels.lead.pan': -0.5, 'master.mute': true });
+  equal('fader değeri düğümlere yazılır', graph.strips.lead.gain.gain.value, 0.25);
+  equal('pan düğüme yazılır', graph.strips.lead.panner.pan.value, -0.5);
+  equal('master mute uygulanır', graph.masterGain.gain.value, 0);
+  engine.update({ 'master.mute': false, 'eq.bass': 4, 'eq.treble': -3, 'reverb.preDelay': 0.05 });
+  equal('master mute açılır', graph.masterGain.gain.value, 0.35);
+  equal('eq bass düğüme yazılır', graph.eq.bands.bass.gain.value, 4);
+  equal('eq treble düğüme yazılır', graph.eq.bands.treble.gain.value, -3);
+  equal('reverb pre-delay düğüme yazılır', graph.reverb.preDelay.delayTime.value, 0.05);
+  engine.update({ 'master.crush': 0.5 });
+  assert('crusher kuru/yaş karışımı', graph.crusher.wet.gain.value > 0.5, String(graph.crusher.wet.gain.value));
+  engine.update({ 'master.crush': 0 });
+  equal('crusher temizlenir', graph.crusher.dry.gain.value, 1);
   equal('varsayılan master seviyesi', engine.mixer.master.volume, 0.35);
 
   equal('tür değiştirilir', engine.setGenre('lofi'), 'lofi');
   equal('tempo türden gelir', engine.tempo, 85);
   equal('yeni beste üretilir', engine.sequence.melody.length, 32);
   equal('geçersiz tür reddedilir', engine.setGenre('yok-böyle'), 'lofi');
+  equal('tür mixer varsayılanı uygulanır', engine.mixer.channels.drums.reverb, getGenreOf('lofi').mixer.channels.drums.reverb);
   engine.update({ 'reverb.size': 3 });
-  equal('reverb boyutu güncellenir', engine.reverb.size, 3);
+  equal('reverb boyutu güncellenir', graph.reverb.size, 3);
 
-  engine.loadState({ genre: 'dark', mixer, sequence: song });
+  engine.setSettings({ steps: 64, noteLength: 1, arp: 'up', scaleId: 'minor-pentatonic' });
+  equal('adım sayısı değişir', engine.steps, 64);
+  equal('beste yeni uzunluğa döner', engine.sequence.melody.length, 64);
+  equal('nota uzunluğu ayarı', engine.settings.noteLength, 1);
+  equal('arpej ayarı', engine.settings.arp, 'up');
+  assert('ölçek nota sayısı', engine.sequence.melody.filter((n) => n !== 'x').length > 0);
+  engine.setSettings({ steps: 16 });
+  equal('kısa döngü', engine.sequence.drums.length, 16);
+  equal('adım geçersiz değere döner', engine.setSettings({ steps: 33 }).steps, 32);
+  engine.setSettings({ steps: 32 });
+
+  engine.loadState({ genre: 'dark', mixer, sequence: song, settings: { steps: 32, noteLength: 2, arp: 'down', scaleId: 'genre' } });
   equal('oturum türü yüklenir', engine.genreKey, 'dark');
   equal('oturum mikseri yüklenir', engine.mixer.channels.lead.volume, mixer.channels.lead.volume);
   equal('oturum bestesi yüklenir', engine.sequence.melody, song.melody);
+  equal('oturum ayarları yüklenir', engine.settings.arp, 'down');
   equal('tempo oturumdan', engine.tempo, 110);
 
   await engine.play();
   assert('çalmaya başlar', engine.isPlaying === true);
   assert('zamanlayıcı adım planladı', engine.events.length > 0, String(engine.events.length));
-  assert('görsel olaylar geçerli', engine.events.every((event) => event.index >= 0 && event.index < 32));
+  assert('görsel olaylar geçerli', engine.events.every((event) => event.index >= 0 && event.index < engine.steps));
   engine.pause();
   assert('duraklar', engine.isPlaying === false);
   equal('durdurulunca olaylar temizlenir', engine.events.length, 0);
   const levels = engine.readLevels();
   assert('seviye kanalları', Object.keys(levels).length === 4, Object.keys(levels).join(','));
   equal('sessizlik seviyesi sıfır', levels.master, 0);
+
+  const render = await engine.renderOffline({ loops: 2, sampleRate: 22050 });
+  equal('çevrimdışı render kanal', render.buffer.numberOfChannels, 2);
+  assert('çevrimdışı render süresi', render.duration > 1, String(render.duration));
+  assert('çevrimdışı render örnek hızı', render.buffer.sampleRate === 22050, String(render.buffer.sampleRate));
+  equal('çevrimdışı crusher yedeği', render.crusher, 'waveshaper');
+
+  const crusherModule = await importModule('js/core/crush.js');
+  const nativeCrusher = new crusherModule.Crusher(fakeContext, new FakeNode('out'), { useWorklet: false });
+  nativeCrusher.setAmount(0.75);
+  assert('waveshaper eğrisi üretildi', nativeCrusher.node.curve && nativeCrusher.node.curve.length === 4096);
+  const curve = nativeCrusher.node.curve;
+  const step = Math.pow(2, Math.round(16 - 12 * 0.75));
+  assert('eğri nicemlenmiş', Array.from(curve).every((value) => Math.abs(value * step - Math.round(value * step)) < 1e-6));
+  assert('eğri sınırları', curve[0] === -1 && curve[curve.length - 1] === 1, `${curve[0]}/${curve[curve.length - 1]}`);
+
   await engine.dispose();
   assert('kaynaklar serbest bırakıldı', engine.ready === false);
 
@@ -473,16 +622,25 @@ async function run() {
   assert('tempo parçasında nota yok', countNotes(meta, 0x90) === 0);
 
   const presets = await importModule('js/io/presets.js');
-  const preset = presets.createPreset({ name: '  Test Preset  ', genre: 'lofi', mixer, sequence: song });
+  const preset = presets.createPreset({
+    name: '  Test Preset  ',
+    genre: 'lofi',
+    mixer,
+    sequence: song,
+    settings: { steps: 32, noteLength: 1, arp: 'down', scaleId: 'dorian' }
+  });
   equal('preset adı temizlenir', preset.name, 'Test Preset');
   equal('preset sürümü', preset.version, 2);
   assert('preset dizileri dolu', preset.sequence.melody.length === 32);
+  equal('preset ayarları', preset.settings.arp, 'down');
   presets.savePreset(preset);
   presets.savePreset({ ...preset, name: 'ikinci' });
   equal('preset listesi', presets.listPresets().map((item) => item.name), ['ikinci', 'Test Preset']);
   equal('preset yüklenir', presets.getPreset('Test Preset').genre, 'lofi');
   presets.savePreset({ ...preset, name: 'Test Preset', mixer: { master: { volume: 0.8 } } });
   equal('preset güncellenir', presets.getPreset('Test Preset').mixer.master.volume, 0.8);
+  const longPreset = presets.createPreset({ name: 'uzun', genre: 'dark', mixer, sequence: song, settings: { steps: 64 } });
+  equal('preset adım sayısı diziye uygulanır', longPreset.sequence.melody.length, 64);
   presets.deletePreset('ikinci');
   equal('preset silinir', presets.listPresets().length, 1);
   let rejected = 0;
@@ -500,10 +658,47 @@ async function run() {
       return false;
     }
   })());
-  presets.saveSession({ genre: 'dark', mixer, sequence: song });
+  presets.saveSession({ genre: 'dark', mixer, sequence: song, settings: { steps: 16, noteLength: 2 } });
   equal('oturum geri yüklenir', presets.loadSession().genre, 'dark');
+  equal('oturum ayarları geri yüklenir', presets.loadSession().settings.steps, 16);
+  equal('oturum dizisi ayara uyar', presets.loadSession().sequence.melody.length, 16);
   presets.clearSession();
   equal('oturum temizlenir', presets.loadSession(), null);
+
+  const wav = await importModule('js/io/wav.js');
+  const wavBytes = await blobBytes(wav.encodeWav({
+    numberOfChannels: 2,
+    sampleRate: 44100,
+    length: 4,
+    getChannelData: (channel) => new Float32Array([0, 0.5, -0.5, 1].map((value) => (channel === 0 ? value : -value)))
+  }));
+  const wavView = new DataView(wavBytes.buffer, wavBytes.byteOffset, wavBytes.byteLength);
+  equal('WAV boyutu', wavBytes.length, 44 + 4 * 2 * 2);
+  equal('WAV RIFF imzası', String.fromCharCode(...wavBytes.slice(0, 4)), 'RIFF');
+  equal('WAV WAVE imzası', String.fromCharCode(...wavBytes.slice(8, 12)), 'WAVE');
+  equal('WAV kanal sayısı', wavView.getUint16(22, true), 2);
+  equal('WAV örnek hızı', wavView.getUint32(24, true), 44100);
+  equal('WAV bit derinliği', wavView.getUint16(34, true), 16);
+  equal('WAV veri boyutu', wavView.getUint32(40, true), 16);
+  equal('WAV ilk örnek', wavView.getInt16(44, true), 0);
+  equal('WAV sol kanal örneği', wavView.getInt16(48, true), 16383);
+  equal('WAV sağ kanal örneği', wavView.getInt16(50, true), -16384);
+  equal('WAV negatif örnek', wavView.getInt16(52, true), -16384);
+  equal('WAV tepe örnek', wavView.getInt16(56, true), 32767);
+  equal('WAV dip örnek', wavView.getInt16(58, true), -32768);
+
+  const share = await importModule('js/io/share.js');
+  const shareUrl = share.encodeShare(preset, 'https://ornek.test/oyun');
+  assert('paylaşım bağlantısı ön ekli', shareUrl.startsWith('https://ornek.test/oyun#retro32:'), shareUrl.slice(0, 48));
+  assert('paylaşım bağlantısı url güvenli', !/[^A-Za-z0-9\-_]/.test(shareUrl.split('#')[1].split(':')[1]), shareUrl.slice(0, 60));
+  const decodedShare = share.decodeShare(shareUrl.split('#')[1]);
+  equal('paylaşım adı', decodedShare.name, 'Test Preset');
+  equal('paylaşım türü', decodedShare.genre, 'lofi');
+  equal('paylaşım ayarı', decodedShare.settings.scaleId, 'dorian');
+  equal('paylaşım dizisi', decodedShare.sequence.melody.length, preset.sequence.melody.length);
+  equal('paylaşım mikseri', decodedShare.mixer.master.volume, preset.mixer.master.volume);
+  equal('bozuk paylaşım bağlantısı', share.decodeShare('#baska:abc'), null);
+  equal('paylaşım dışı bağlantı', share.decodeShare('#yok'), null);
 
   const recorder = await importModule('js/io/recorder.js');
   equal('webm uzantısı', recorder.recordingExtension('audio/webm;codecs=opus'), 'webm');
@@ -579,7 +774,7 @@ async function run() {
   const standalone = join(ROOT, 'dist', 'retro-synth-standalone.html');
   if (existsSync(standalone)) {
     const html = readFileSync(standalone, 'utf8');
-    const script = /<script>\n([\s\S]*?)<\/script>/.exec(html);
+    const script = /<script data-retro-bundle>\n([\s\S]*?)<\/script>/.exec(html);
     assert('paket betiği bulundu', !!script);
     if (script) {
       let compiled = true;

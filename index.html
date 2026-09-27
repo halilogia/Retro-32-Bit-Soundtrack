@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="tr" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>32-Bit Retro Soundtrack Generator</title>
-    <meta name="description" content="Tarayıcıda çalışan, prosedürel retro müzik üreticisi: mixer, reverb/delay, MIDI dışa aktarım ve preset kaydetme.">
+    <meta name="description" content="Tarayıcıda çalışan prosedürel retro müzik üreticisi: mixer, reverb/delay, WAV ve MIDI dışa aktarım, preset kaydetme.">
     <meta name="theme-color" content="#1a0b2e">
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
@@ -12,6 +12,18 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="./css/main.css">
+    <script>
+        (function () {
+            try {
+                var stored = localStorage.getItem('retro-32-bit-soundtrack.theme');
+                if (stored === 'light' || stored === 'dark') {
+                    document.documentElement.dataset.theme = stored;
+                } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+                    document.documentElement.dataset.theme = 'light';
+                }
+            } catch (error) { void error; }
+        })();
+    </script>
 </head>
 <body>
 
@@ -27,33 +39,44 @@
             <button id="btnPlay" class="control-element" type="button">BAŞLAT</button>
             <button id="btnRandom" class="control-element control-pink" type="button">YENİ ŞARKI</button>
             <button id="btnMidi" class="control-element control-blue" type="button">MIDI</button>
+            <button id="btnWav" class="control-element control-blue" type="button">WAV</button>
             <button id="btnRecord" class="control-element control-red" type="button" disabled>REC</button>
+            <button id="btnTheme" class="control-element control-small" type="button" aria-pressed="false">AYDINLIK</button>
         </div>
 
         <div class="status" id="statusText">SİSTEM HAZIR.</div>
+        <ul class="status-log" id="statusLog" aria-live="polite"></ul>
         <div class="engine-info" id="engineInfo"></div>
+
+        <details class="panel" open>
+            <summary>ŞARKI AYARLARI</summary>
+            <div class="panel-body" id="settingsPanel">
+                <div id="songSettings"></div>
+            </div>
+        </details>
 
         <details class="panel" open>
             <summary>MİXER</summary>
             <div class="panel-body">
                 <div class="mixer-channels" id="mixerChannels"></div>
                 <div class="mixer-buses" id="mixerBuses"></div>
-                <p class="panel-hint">SPACE çal/duraklat · R yeni şarkı · M master mute · sürgüleri çift tıklayarak sıfırla</p>
+                <p class="panel-hint">SPACE çal/duraklat · R yeni şarkı · M master mute · sürgüye çift tıkla fabrika değerine döner</p>
             </div>
         </details>
 
         <details class="panel">
-            <summary>PRESET &amp; DOSYA</summary>
-            <div class="panel-body">
+            <summary id="presetPanelTitle">PRESET &amp; DOSYA</summary>
+            <div class="panel-body" id="presetPanel">
                 <div class="row">
                     <input id="presetName" class="text-input" type="text" maxlength="24" placeholder="PRESET ADI" autocomplete="off" aria-label="Preset adı">
                     <button id="presetSave" class="control-element control-small" type="button">KAYDET</button>
                     <button id="presetExport" class="control-element control-small control-blue" type="button">JSON İNDİR</button>
                     <button id="presetImport" class="control-element control-small control-blue" type="button">JSON YÜKLE</button>
+                    <button id="presetShare" class="control-element control-small control-blue" type="button">PAYLAŞ</button>
                     <input id="presetFile" type="file" accept="application/json,.json" hidden>
                 </div>
                 <ul class="preset-list" id="presetList"></ul>
-                <p class="panel-hint">Presetler tarayıcıda saklanır, JSON ile paylaşılabilir. Son oturum açılışta geri yüklenir.</p>
+                <p class="panel-hint">Presetler tarayıcıda saklanır, JSON ile paylaşılabilir, bu panele sürükleyip bırakabilirsin. Son oturum açılışta geri yüklenir.</p>
             </div>
         </details>
     </main>

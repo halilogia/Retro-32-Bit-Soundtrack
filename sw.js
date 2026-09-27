@@ -1,4 +1,4 @@
-const CACHE = 'retro32-v2.0.0';
+const CACHE = 'retro32-v2.1.0';
 
 const PRECACHE = [
   './',
@@ -7,19 +7,27 @@ const PRECACHE = [
   './css/main.css',
   './js/main.js',
   './js/core/composer.js',
+  './js/core/crush.js',
   './js/core/engine.js',
   './js/core/effects.js',
   './js/core/genres.js',
   './js/core/instruments.js',
   './js/core/mixer-state.js',
+  './js/core/scales.js',
+  './js/core/song-settings.js',
   './js/core/theory.js',
   './js/io/download.js',
   './js/io/midi.js',
   './js/io/presets.js',
   './js/io/recorder.js',
+  './js/io/share.js',
+  './js/io/wav.js',
   './js/ui/controls.js',
   './js/ui/mixer-ui.js',
   './js/ui/presets-ui.js',
+  './js/ui/settings-ui.js',
+  './js/ui/status-log.js',
+  './js/ui/theme.js',
   './js/ui/visualizer.js',
   './js/worklets/crush-processor.js',
   './js/worklets/noise-processor.js',

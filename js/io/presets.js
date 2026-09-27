@@ -1,5 +1,6 @@
 import { hasGenre } from '../core/genres.js';
 import { sanitizeSequence } from '../core/composer.js';
+import { sanitizeSettings } from '../core/song-settings.js';
 import { sanitizeMixer } from '../core/mixer-state.js';
 import { downloadBlob, slugify, timestamp } from './download.js';
 
@@ -35,15 +36,17 @@ export function cleanName(value) {
   return (name || 'PRESET').slice(0, MAX_NAME);
 }
 
-export function createPreset({ name, genre, mixer, sequence }) {
+export function createPreset({ name, genre, mixer, sequence, settings }) {
+  const clean = sanitizeSettings(settings);
   return {
     app: APP,
     version: VERSION,
     name: cleanName(name),
     createdAt: new Date().toISOString(),
     genre: hasGenre(genre) ? genre : 'arcade',
+    settings: clean,
     mixer: sanitizeMixer(mixer),
-    sequence: sanitizeSequence(sequence)
+    sequence: sanitizeSequence(sequence, clean.steps)
   };
 }
 
@@ -57,7 +60,8 @@ export function validatePreset(raw) {
     name: raw.name,
     genre: raw.genre,
     mixer: raw.mixer,
-    sequence: raw.sequence
+    sequence: raw.sequence,
+    settings: raw.settings
   });
 }
 
@@ -95,13 +99,15 @@ export function getPreset(name) {
 }
 
 export function saveSession(state) {
+  const settings = sanitizeSettings(state.settings);
   const session = {
     app: APP,
     version: VERSION,
     savedAt: new Date().toISOString(),
     genre: hasGenre(state.genre) ? state.genre : 'arcade',
+    settings,
     mixer: sanitizeMixer(state.mixer),
-    sequence: sanitizeSequence(state.sequence)
+    sequence: sanitizeSequence(state.sequence, settings.steps)
   };
   writeStore(SESSION_KEY, session);
   return session;

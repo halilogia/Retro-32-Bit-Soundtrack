@@ -1,5 +1,5 @@
-import { CHANNELS, DELAY_DIVISIONS, DEFAULT_MIXER } from '../core/mixer-state.js';
-import { el, createFader, createSelect, createMuteButton, createMeter } from './controls.js';
+import { CHANNELS, DELAY_DIVISIONS, EQ_BANDS, DEFAULT_MIXER } from '../core/mixer-state.js';
+import { el, createFader, createSelect, createMuteButton, createMeter, panLabel, decibels, milliseconds } from './controls.js';
 
 const seconds = (value) => `${value.toFixed(2)} SN`;
 const DEFAULTS = DEFAULT_MIXER;
@@ -27,6 +27,16 @@ export class MixerUI {
     this.engine.update({ [path]: value });
   }
 
+  fader(path, options) {
+    return this.addControl(
+      path,
+      createFader({
+        ...options,
+        onInput: (value) => this.change(path, value)
+      })
+    );
+  }
+
   buildChannels(root) {
     for (const { key, label } of CHANNELS) {
       const defaults = DEFAULTS.channels[key];
@@ -36,37 +46,34 @@ export class MixerUI {
         `channels.${key}.mute`,
         createMuteButton({ label: 'MUTE', onChange: (value) => this.change(`channels.${key}.mute`, value) })
       );
-      const volume = this.addControl(
-        `channels.${key}.volume`,
-        createFader({
-          id: `mix-${key}-volume`,
-          label: 'VOL',
-          value: defaults.volume,
-          onInput: (value) => this.change(`channels.${key}.volume`, value)
-        })
-      );
-      const reverb = this.addControl(
-        `channels.${key}.reverb`,
-        createFader({
-          id: `mix-${key}-reverb`,
-          label: 'REV',
-          value: defaults.reverb,
-          onInput: (value) => this.change(`channels.${key}.reverb`, value)
-        })
-      );
-      const delay = this.addControl(
-        `channels.${key}.delay`,
-        createFader({
-          id: `mix-${key}-delay`,
-          label: 'DLY',
-          value: defaults.delay,
-          onInput: (value) => this.change(`channels.${key}.delay`, value)
-        })
-      );
+      const volume = this.fader(`channels.${key}.volume`, {
+        id: `mix-${key}-volume`,
+        label: 'VOL',
+        value: defaults.volume
+      });
+      const pan = this.fader(`channels.${key}.pan`, {
+        id: `mix-${key}-pan`,
+        label: 'PAN',
+        min: -1,
+        max: 1,
+        step: 0.05,
+        value: defaults.pan,
+        format: panLabel
+      });
+      const reverb = this.fader(`channels.${key}.reverb`, {
+        id: `mix-${key}-reverb`,
+        label: 'REV',
+        value: defaults.reverb
+      });
+      const delay = this.fader(`channels.${key}.delay`, {
+        id: `mix-${key}-delay`,
+        label: 'DLY',
+        value: defaults.delay
+      });
       root.append(
         el('div', { class: 'strip', 'data-channel': key }, [
           el('div', { class: 'strip-head' }, [el('span', { class: 'strip-name', text: label }), meter.root]),
-          el('div', { class: 'strip-controls' }, [volume.root, reverb.root, delay.root, mute.root])
+          el('div', { class: 'strip-controls' }, [volume.root, pan.root, reverb.root, delay.root, mute.root])
         ])
       );
     }
@@ -79,24 +86,16 @@ export class MixerUI {
       'master.mute',
       createMuteButton({ label: 'MUTE', onChange: (value) => this.change('master.mute', value) })
     );
-    const masterVolume = this.addControl(
-      'master.volume',
-      createFader({
-        id: 'mix-master-volume',
-        label: 'VOL',
-        value: DEFAULTS.master.volume,
-        onInput: (value) => this.change('master.volume', value)
-      })
-    );
-    const crush = this.addControl(
-      'master.crush',
-      createFader({
-        id: 'mix-master-crush',
-        label: 'CRUSH',
-        value: DEFAULTS.master.crush,
-        onInput: (value) => this.change('master.crush', value)
-      })
-    );
+    const masterVolume = this.fader('master.volume', {
+      id: 'mix-master-volume',
+      label: 'VOL',
+      value: DEFAULTS.master.volume
+    });
+    const crush = this.fader('master.crush', {
+      id: 'mix-master-crush',
+      label: 'CRUSH',
+      value: DEFAULTS.master.crush
+    });
     root.append(
       el('div', { class: 'strip strip-master' }, [
         el('div', { class: 'strip-head' }, [el('span', { class: 'strip-name', text: 'MASTER' }), masterMeter.root]),
@@ -104,32 +103,51 @@ export class MixerUI {
       ])
     );
 
-    const size = this.addControl(
-      'reverb.size',
-      createFader({
-        id: 'mix-reverb-size',
-        label: 'SIZE',
-        min: 0.2,
-        max: 4,
-        step: 0.05,
-        value: DEFAULTS.reverb.size,
-        format: seconds,
-        onInput: (value) => this.change('reverb.size', value)
-      })
-    );
-    const reverbDamp = this.addControl(
-      'reverb.damp',
-      createFader({
-        id: 'mix-reverb-damp',
-        label: 'DAMP',
-        value: DEFAULTS.reverb.damp,
-        onInput: (value) => this.change('reverb.damp', value)
+    const eqControls = EQ_BANDS.map((band) =>
+      this.fader(`eq.${band.key}`, {
+        id: `mix-eq-${band.key}`,
+        label: band.label,
+        min: -12,
+        max: 12,
+        step: 0.5,
+        value: DEFAULTS.eq[band.key],
+        format: decibels
       })
     );
     root.append(
       el('div', { class: 'strip' }, [
+        el('div', { class: 'strip-head' }, [el('span', { class: 'strip-name', text: 'EQ' })]),
+        el('div', { class: 'strip-controls' }, eqControls.map((control) => control.root))
+      ])
+    );
+
+    const size = this.fader('reverb.size', {
+      id: 'mix-reverb-size',
+      label: 'SIZE',
+      min: 0.2,
+      max: 4,
+      step: 0.05,
+      value: DEFAULTS.reverb.size,
+      format: seconds
+    });
+    const preDelay = this.fader('reverb.preDelay', {
+      id: 'mix-reverb-pre',
+      label: 'PRE',
+      min: 0,
+      max: 0.2,
+      step: 0.005,
+      value: DEFAULTS.reverb.preDelay,
+      format: milliseconds
+    });
+    const reverbDamp = this.fader('reverb.damp', {
+      id: 'mix-reverb-damp',
+      label: 'DAMP',
+      value: DEFAULTS.reverb.damp
+    });
+    root.append(
+      el('div', { class: 'strip' }, [
         el('div', { class: 'strip-head' }, [el('span', { class: 'strip-name', text: 'REVERB' })]),
-        el('div', { class: 'strip-controls' }, [size.root, reverbDamp.root])
+        el('div', { class: 'strip-controls' }, [size.root, preDelay.root, reverbDamp.root])
       ])
     );
 
@@ -143,24 +161,16 @@ export class MixerUI {
         onChange: (value) => this.change('delay.division', Number(value))
       })
     );
-    const feedback = this.addControl(
-      'delay.feedback',
-      createFader({
-        id: 'mix-delay-feedback',
-        label: 'FEEDBK',
-        value: DEFAULTS.delay.feedback,
-        onInput: (value) => this.change('delay.feedback', value)
-      })
-    );
-    const delayDamp = this.addControl(
-      'delay.damp',
-      createFader({
-        id: 'mix-delay-damp',
-        label: 'DAMP',
-        value: DEFAULTS.delay.damp,
-        onInput: (value) => this.change('delay.damp', value)
-      })
-    );
+    const feedback = this.fader('delay.feedback', {
+      id: 'mix-delay-feedback',
+      label: 'FEEDBK',
+      value: DEFAULTS.delay.feedback
+    });
+    const delayDamp = this.fader('delay.damp', {
+      id: 'mix-delay-damp',
+      label: 'DAMP',
+      value: DEFAULTS.delay.damp
+    });
     root.append(
       el('div', { class: 'strip' }, [
         el('div', { class: 'strip-head' }, [el('span', { class: 'strip-name', text: 'DELAY' })]),
