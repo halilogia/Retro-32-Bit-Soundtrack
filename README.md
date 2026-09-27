@@ -5,7 +5,7 @@ matematiksel dalgalardan (sine, square, sawtooth, triangle) ve efekt zincirlerin
 
 Kurulum gerektirmez, derleme gerektirmez, npm paketi yoktur. Sadece tarayıcı.
 
-**Sürüm:** 2.1.0 · [Yol haritası](ROADMAP.md) · [Sürüm geçmişi](CHANGELOG.md) · [Mimari](ARCHITECTURE.md)
+**Sürüm:** 2.1.0 · [Güncel plan ve sürüm geçmişi](CHANGELOG.md) · [Mimari](ARCHITECTURE.md)
 
 ---
 
@@ -183,7 +183,7 @@ Retro-32-Bit-Soundtrack/
 └── dist/                      # Üretilen tek dosya sürümü (git'e dahil değil)
 ```
 
-Yol haritası için [ROADMAP.md](ROADMAP.md), sürüm geçmişi için [CHANGELOG.md](CHANGELOG.md),
+Güncel plan ve sürüm geçmişi için [CHANGELOG.md](CHANGELOG.md) dosyasına,
 ayrıntılı ses grafiği için [ARCHITECTURE.md](ARCHITECTURE.md) dosyasına bakın.
 
 ---

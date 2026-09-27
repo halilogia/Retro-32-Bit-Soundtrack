@@ -110,7 +110,7 @@ Retro-32-Bit-Soundtrack/
 ├── tools/                      # build.mjs, check.mjs, make-icons.mjs
 ├── docs/KNOWLEDGE.md           # Müzik ve dosya formatı bilgisi
 ├── dist/                       # Üretilen tek dosya paket (git'e dahil değil)
-├── README.md, ARCHITECTURE.md, ROADMAP.md, CHANGELOG.md, GEMINI.md
+├── README.md, ARCHITECTURE.md, CHANGELOG.md (sürüm geçmişi + güncel plan), GEMINI.md
 ├── LICENSE
 └── brain/                      # Proje yönetimi (git'e dahil değil)
 ```

@@ -65,6 +65,7 @@
 - Ses `OfflineAudioContext` içinde 44.1 kHz stereo render edilir, iki döngü + 2.5 sn kuyruk payı planlanır.
 
 ## 🧩 Mimari Notlar
+- Bu depoda ayrı bir yol haritası dosyası yoktur; güncel plan `CHANGELOG.md` → `📋 Güncel Plan` bölümündedir.
 - `AudioContext.currentTime` tek zaman kaynağıdır; 25 ms bakış pencereli `setTimeout` zamanlayıcısı
   120 ms ileriye notaları planlar.
 - Görselleştirici olayları zaman damgalı kuyrukta tutulur ve `requestAnimationFrame` içinde eşleştiğinde oynatılır.
