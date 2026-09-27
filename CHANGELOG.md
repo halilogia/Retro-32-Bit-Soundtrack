@@ -1,6 +1,7 @@
 # Changelog
 
-Tüm önemli değişiklikler bu dosyada belgelenir.
+Tüm önemli değişiklikler bu dosyada belgelenir. **Yapılmamış işler [ROADMAP.md](ROADMAP.md) dosyasındadır;**
+burada yalnızca teslim edilenler ve o sürümde düzeltilen hatalar bulunur.
 
 ## [Unreleased]
 
@@ -14,7 +15,7 @@ Tüm önemli değişiklikler bu dosyada belgelenir.
 
 ### 📦 Değişiklikler
 
-- **
+- Yol haritası v2.1 bölümü tamamlandı; tüm maddeler 2.1.0 kaydına taşındı, kalan plan sadeleştirildi
 
 ## [2.1.0] - 27 Eylül 2026
 

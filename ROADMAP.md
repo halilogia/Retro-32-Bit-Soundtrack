@@ -1,90 +1,76 @@
 # Roadmap 🗺️
 
-> Tamamlanan tüm maddeler [CHANGELOG.md](CHANGELOG.md) dosyasında sürüm bazında kayıtlıdır.
-> Bu dosya yalnızca **yapılacak işleri** tutar.
+> Bu dosya yalnızca **yapılmamış işleri** tutar. Teslim edilen her şey [CHANGELOG.md](CHANGELOG.md) içinde sürüm
+> bazında kayıtlıdır; burada tamamlanmış madde bulunmaz.
 
-**Durum:** v2.1.0 yayında (27 Eylül 2026) · Modüler mimari, mixer + efektler, WAV/MIDI dışa aktarım, preset +
-paylaşım, PWA, açık/koyu tema.
+**Durum:** v2.1.0 · 25 ES modülü · mixer + efektler · WAV/MIDI · preset + paylaşım · PWA · açık/koyu tema
 **Son güncelleme:** 27 Eylül 2026
 
 ---
 
-## 🎯 Kısa Vadeli (v2.2)
+## 🎵 Bestecinin Gelişmesi
 
-### Bestecinin gelişmesi
-
-- [ ] **Melodi editörü** — piyano klavyesi + adım ızgarası; elle nota girme, silme ve vurgulama
-      (yeni `ui/piano-ui.js`, mevcut `engine.setSequence` API'sini kullanır)
-- [ ] **Akor ilerlemesi** — ölçü başına akor listesi, akor tonlarını seçili gamla harmanize etme
-      (`core/scales.js` içine akor kurucu ekle)
+- [ ] **Melodi editörü** — piyano klavyesi + adım ızgarası, elle nota girme/silme (`ui/piano-ui.js`)
+- [ ] **Akor ilerlemesi** — ölçü başına akor listesi, akor tonlarını seçili gamla harmanize etme (`core/scales.js`)
 - [ ] **Çoklu desen ve zincirleme** — A/B/C bölümleri, geçiş ve tekrar düzeni
-- [ ] **Davul deseni editörü** — kick/snare/hat ızgarası ve yeni perküsyon sesleri
-- [ ] **MIDI içe aktarım** — `.mid` okuyup nota dizisine çevirme (`io/midi.js` içine ayrıştırıcı)
-- [ ] **Ölçek editörü** — kullanıcı tanımlı perde aralıkları (yarım tonlar) ve mod değiştirme
+- [ ] **Davul deseni editörü** — kick/snare/hat ızgarası, yeni perküsyon sesleri
+- [ ] **MIDI içe aktarım** — `.mid` ayrıştırıcı ile nota dizisine çevirme (`io/midi.js`)
+- [ ] **Kullanıcı tanımlı ölçek** — serbest perde aralıkları ve mod değiştirme (`core/scales.js`)
 
-### Ses
+## 🔊 Ses
 
-- [ ] **Yumuşak/derinlik zinciri** — master compressor öncesi ikinci bir bant ve transient shaper
-- [ ] **Stereo genişletici** — delay tabanlı Haas veya mid/side işleme (yeni düğüm)
-- [ ] **LFO** — filtre/zarf/pan otomasyonu için basit düşük frekanslı osilatör (birden fazla hedefe bağlanabilir)
-- [ ] **Kanal solo** — mixer'da solo butonu (bus seviyesi mantığı)
-- [ ] **Reverb türü seçimi** — plate / hall / room (impuls profilinin süre ve eğim varyasyonları)
+- [ ] **Kanal SOLO** — bus seviyesi mantığıyla
+- [ ] **Geçici zincir** — master compressor öncesi ikinci bant + transient shaper
+- [ ] **Stereo genişletici** — delay tabanlı Haas veya mid/side işleme
+- [ ] **LFO** — filtre/zarf/pan otomasyonu
+- [ ] **Reverb türleri** — plate / hall / room (impuls profili varyasyonları)
+- [ ] **WAV seçenekleri** — tek döngü, stem export (lead / bass / drums ayrı dosyalar)
 
-### Arayüz
+## 🎛️ Arayüz
 
-- [ ] **Enstrüman panosu** — hangi synth/efekt zincirinin hangi nota için çaldığını gösteren panel
-- [ ] **Preset arama ve sıralama** — çok sayıda preset olduğunda liste yerine arama kutusu
-- [ ] **Klavye odağı sırası** — `details` panelleri açılıp kapanırken odağı koruyan yönlendirme
-- [ ] **Dokunmatik fader ince ayarı** — kaydırma hareketi ile tek adım hassasiyet
-
-### Dışa Aktarım
-
-- [ ] **Tek döngü WAV** ve **stem export** (lead / bass / drums ayrı dosyalar)
-- [ ] **PNG görselleştirme dışa aktarımı** — 32/64 adımlık şarkının statik bar görseli
-- [ ] **MIDI içe/dışa yön ayarı** — tempo bölümü, kanal programları ve perküsyon haritası seçimi
-
----
-
-## 🚀 Orta Vadeli (v3.0)
-
-- [ ] **Video dışa aktarım** — ses + görselleştirme → WebM/MP4
-- [ ] **Masaüstü paketi** — Electron veya Tauri ile tek uygulama
-- [ ] **Oyun motoru SDK'sı** — aynı sentez motorunun Web Audio dışına taşınması
-- [ ] **Canlı performans modu** — mikserden geri beslemeli deneme, loop kaydı ve katmanlama
-- [ ] **Plugin/format desteği** — VST3 veya CLAP benzeri bir dışa aktarım seçeneği
-- [ ] **Çok dilli arayüz** — TR / EN geçişi (`ui/i18n.js`)
-
----
+- [ ] **Enstrüman panosu** — hangi zincirin hangi nota için çaldığını gösteren panel
+- [ ] **Preset arama ve sıralama** — çok preset olduğunda liste yerine arama
+- [ ] **Klavye odağı sırası** — paneller açılıp kapanırken odağı koruyan yönlendirme
+- [ ] **Dokunmatik fader ince ayarı** — kaydırma ile tek adım hassasiyet
+- [ ] **MIDI yön ayarı** — tempo bölümü, kanal programları, perküsyon haritası seçimi
+- [ ] **PNG görselleştirme dışa aktarımı** — 16/32/64 adımlık statik bar görseli
 
 ## 🔧 Altyapı ve Kalite
 
-- [ ] **GitHub Actions** — `npm run check` + `npm run build` + ikon üretimini her push'ta çalıştır
+- [ ] **GitHub Actions** — `check` + `build` + `icons` her push'ta
 - [ ] **Sürüm paketleri** — `dist/` dosyasını GitHub Release'e yükleyen iş akışı
-- [ ] **GitHub Pages dağıtımı** — demo sürümü her sürümde yayınlansın
-- [ ] **Sürüm etiketi** — sürüm numarasını tek yerden okuyup arayüzde ve manifestte göster
-- [ ] **Test kapsamı** — `tools/check.mjs` içine küçük bir DOM taklidi ile arayüz testleri
-- [ ] **Tarayıcı testi** — headless koşuyu CI'a taşı (mevcut üç senaryo: modüler, paket, `file://`)
+- [ ] **GitHub Pages** — demo sürümü her sürümde yayınlansın
+- [ ] **Sürüm etiketi** — sürüm numarası tek yerden okunup arayüzde ve manifestte gösterilsin
+- [ ] **Test kapsamı** — `tools/check.mjs` içine küçük DOM taklidi ile arayüz testleri
+- [ ] **Tarayıcı testi CI'da** — mevcut üç senaryo (modüler, paket, `file://`) otomatik koşulsun
 - [ ] **Erişilebilirlik** — ekran okuyucu duyuruları, odak sırası, kontrast denetimi
 - [ ] **Performans ölçümü** — zamanlayıcı sapması ve etkin ses sayısı göstergesi
 
----
+## 🌮 Uzun Vadeli (v3.0)
 
-## 💡 Değerlendirme Aşamasındaki Fikirler
+- [ ] Video dışa aktarımı (ses + görselleştirme → WebM/MP4)
+- [ ] Masaüstü paketi (Electron / Tauri)
+- [ ] Oyun motoru SDK'sı (sentez motorunun Web Audio dışına taşınması)
+- [ ] Canlı performans modu (loop kaydı, katmanlama)
+- [ ] Plugin/format desteği (VST3 / CLAP benzeri)
+- [ ] Çok dilli arayüz (TR / EN)
+
+## 💡 Fikirler
 
 - [ ] Yapay zekâ destekli melodi önerileri
 - [ ] VR/AR görselleştirici
 - [ ] WebSocket ile canlı paylaşım (jam session)
-- [ ] Tema üreticisi — seed'den deterministik tür + kitap renkleri
-- [ ] Enstrüman örnekleri (kullanıcı yüklediği seslerden prosedürel aletler üretme)
+- [ ] Tema üreticisi (seed'den tür + kitap renkleri)
+- [ ] Enstrüman örnekleri (yüklenen seslerden prosedürel aletler)
 
 ---
 
-## 🧭 Nasıl İlerlenir?
+## 🧭 Çalışma Düzeni
 
-1. Bir madde seç, ilgili modülü belirle (yukarıdaki parantez içi notlar yol gösterir).
-2. `npm run check` yeşilken başla, iş bitince tekrar koştur.
-3. Tarayıcıda `python -m http.server 8123` ile aç, konsolda hata olmadığından emin ol.
-4. `tools/build.mjs` içinde bir dosyaya dokunduysan `npm run build` ile paketi yeniden üret.
-5. Yeni bir `js/` dosyası eklediysen `sw.js` içindeki `PRECACHE` listesine de ekle ve `CACHE` sürümünü artır.
-6. `docs/KNOWLEDGE.md` içine yeni formül/kural eklediysen aynı dosyada güncelle.
-7. Biten maddeyi bu dosyadan sil, `CHANGELOG.md` içindeki `[Unreleased]` bölümüne taşı.
+1. Maddeyi seç, ilgili modülü belirle (parantez içi notlar yol gösterir).
+2. `npm run check` yeşilken başla (309 kontrol), bitince tekrar koştur.
+3. `python -m http.server 8123` ile tarayıcıda dinle, konsolda hata olmadığını doğrula.
+4. `tools/build.mjs` içine dokunduysan `npm run build` ile paketi yeniden üret.
+5. Yeni `js/` dosyası eklediysen `sw.js` `PRECACHE` listesine ekle ve `CACHE` sürümünü artır.
+6. Yeni formül/kural varsa `docs/KNOWLEDGE.md` dosyasını güncelle.
+7. Biten maddeyi buradan sil, `CHANGELOG.md` içindeki `[Unreleased]` bölümüne taşı.
