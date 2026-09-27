@@ -15,9 +15,13 @@ Ayrı bir yol haritası dosyası tutulmaz.
 
 ### 📦 Değişiklikler
 
-- Yol haritası bu dosyaya taşındı, ayrı `ROADMAP.md` kaldırıldı
+-
 
 ## [2.1.0] - 27 Eylül 2026
+
+### 📦 Değişiklikler
+
+- 🗂️ Yol haritası bu dosyaya taşındı, ayrı `ROADMAP.md` kaldırıldı
 
 ### ✨ Eklenenler
 
