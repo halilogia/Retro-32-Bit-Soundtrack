@@ -1,0 +1,36 @@
+name: Quality & Verification CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Run 309 Quality Checks & Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run Integrity Checks
+        run: node tools/check.mjs
+
+      - name: Build Single-File Distribution
+        run: node tools/build.mjs
+
+      - name: GravityGuard Secret Leak Check
+        run: |
+          if git grep -EI "sk-ant-|ghp_|AKIA[0-9A-Z]{16}" -- ':!*.lock'; then
+            echo "::error::Potential secret leak detected!"
+            exit 1
+          fi
