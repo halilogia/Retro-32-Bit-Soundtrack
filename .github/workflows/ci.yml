@@ -22,11 +22,11 @@ jobs:
         with:
           node-version: 22
 
-      - name: Run Integrity Checks
-        run: node tools/check.mjs
-
       - name: Build Single-File Distribution
         run: node tools/build.mjs
+
+      - name: Run Integrity Checks
+        run: node tools/check.mjs
 
       - name: GravityGuard Secret Leak Check
         run: |
